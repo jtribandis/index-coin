@@ -1,0 +1,37 @@
+version: 1
+policy:
+  required_approvals: 1
+  block_on:
+    - test_failures
+    - security_findings
+    - golden_drift_unexplained
+  reviewers:
+    - "@jtribandis"
+
+review:
+  depth: standard
+  rules:
+    - id: metrics-determinism
+      description: "Flag if determinism or metric ranges fail"
+      require_checks:
+        - "determinism"
+        - "metrics"
+    
+    - id: golden-drift
+      description: "Block if golden snapshots changed without PR explanation"
+      require_checks:
+        - "golden"
+    
+    - id: static-analysis
+      require_checks:
+        - "ruff"
+        - "mypy"
+        - "bandit"
+
+ui:
+  summarize_findings: true
+  request_fixes_as_suggestions: true
+
+labels:
+  on_block: ["needs-fix"]
+  on_pass: ["qa-pass"]
