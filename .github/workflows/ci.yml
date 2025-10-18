@@ -99,12 +99,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run determinism check
         run: |
-          if [ -f src/modeling/determinism_check.py ]; then
-            python -m src.modeling.determinism_check --seed 42
-          else
-            echo "⚠️ Determinism check skipped (module not implemented yet)"
-            exit 0
-          fi
+          ./.github/scripts/optional-check.sh src/modeling/determinism_check.py -- python -m src.modeling.determinism_check --seed 42
 
   metrics:
     name: Metrics Validation
@@ -118,9 +113,4 @@ jobs:
         run: pip install -r requirements.txt
       - name: Validate metrics
         run: |
-          if [ -f src/eval/validate_metrics.py ]; then
-            python -m src.eval.validate_metrics artifacts/portfolio/perf_metrics.json
-          else
-            echo "⚠️ Metrics validation skipped (module not implemented yet)"
-            exit 0
-          fi
+          ./.github/scripts/optional-check.sh src/eval/validate_metrics.py -- python -m src.eval.validate_metrics artifacts/portfolio/perf_metrics.json
