@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+from typing import List
 import pandas as pd
+
+__all__: List[str] = [
+    "compute_daily_returns",
+    "compute_cumulative_returns",
+    "annualize_returns",
+    "compute_total_return",
+]
 
 
 def compute_daily_returns(prices: pd.Series) -> pd.Series:
     """Compute period-over-period percentage returns from a price series.
 
     Args:
-        prices (pd.Series): Series of prices; must be non-empty, numeric, and contain no negative values.
+        prices (pd.Series): Series of prices; must be non-empty, numeric,
+            and contain no negative values.
 
     Returns:
-        pd.Series: Series of daily returns computed as ``(P_t / P_{t-1}) - 1`` with
-        the same index as ``prices``. The first element will be ``NaN``.
+        pd.Series: Series of returns computed as ``(P_t / P_{t-1}) - 1`` with
+            the same index as ``prices``. The first element will be ``NaN``.
 
     Raises:
         TypeError: If ``prices`` is not a pandas Series.
@@ -26,27 +35,23 @@ def compute_daily_returns(prices: pd.Series) -> pd.Series:
     if (prices < 0).any():
         raise ValueError("prices cannot contain negative values")
 
-    # Do not forward/backward fill to avoid silently propagating values.
+    # Avoid forward/backward fill to prevent silently propagating values.
     return prices.pct_change(fill_method=None)
 
 
 def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
     """Convert periodic returns into a cumulative value series starting at 1.0.
 
-    The cumulative value series V is defined as:
-        V_t = Π_{i=0..t} (1 + r_i), treating NaN returns as 0 for compounding
-        (i.e., the cumulative value is carried forward unchanged on NaN).
-
-    Note:
-        With this convention, the first element equals ``1.0 * (1 + r_0)`` if
-        ``r_0`` is not NaN; otherwise it remains ``1.0``.
+    Convention:
+        - First value is **1.0** (base NAV).
+        - Each subsequent value compounds prior periods’ returns.
+        - NaN returns are treated as 0% for compounding (carry forward).
 
     Args:
-        returns (pd.Series): Series of periodic returns (e.g., daily returns). NaN values
-            are allowed and indicate missing returns (carry-forward behavior).
+        returns (pd.Series): Periodic returns (e.g., daily). NaN allowed.
 
     Returns:
-        pd.Series: Cumulative value series with the same index as ``returns``.
+        pd.Series: Cumulative value series aligned to ``returns``.
 
     Raises:
         TypeError: If ``returns`` is not a pandas Series.
@@ -58,27 +63,28 @@ def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
         raise ValueError("returns series cannot be empty")
 
     numeric = pd.to_numeric(returns, errors="coerce")
-    # If coercion produced NaN where original wasn't NaN, then non-numeric existed.
+    # If coercion produced NaN where original wasn't NaN, there were non-numeric values.
     if (numeric.isna() & ~returns.isna()).any():
         raise ValueError("returns must contain only numeric values (NaN allowed)")
 
-    # Treat NaN as a 0% return → carry forward the cumulative value.
-    return (1.0 + numeric.fillna(0.0)).cumprod()
+    # Treat NaN as 0% return → carry forward; shift so the first element is 1.0.
+    cum = (1.0 + numeric.fillna(0.0)).cumprod().shift(fill_value=1.0)
+    return cum.astype(float)
 
 
 def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Series:
     """Annualize periodic returns by compounding to the specified frequency.
 
     Args:
-        returns (pd.Series): Series of periodic returns (each element is the return for one period).
-        periods_per_year (int): Number of compounding periods per year (must be > 0).
+        returns (pd.Series): Periodic returns for one period each.
+        periods_per_year (int): Compounding periods per year (> 0).
 
     Returns:
         pd.Series: Annualized returns computed as ``(1 + r) ** periods_per_year - 1``.
 
     Raises:
         TypeError: If ``returns`` is not a pandas Series.
-        ValueError: If ``periods_per_year`` is not greater than 0.
+        ValueError: If ``periods_per_year`` <= 0.
     """
     if not isinstance(returns, pd.Series):
         raise TypeError("returns must be a pandas Series")
@@ -92,8 +98,7 @@ def compute_total_return(cumulative_returns: pd.Series) -> float:
     """Compute total return from a cumulative value series.
 
     Args:
-        cumulative_returns (pd.Series): Series of cumulative values, typically produced by
-            ``compute_cumulative_returns``. The first value (V_0) should be 1.0.
+        cumulative_returns (pd.Series): Cumulative values (V_0 should be 1.0).
 
     Returns:
         float: Total return equal to the final cumulative value minus 1.0.
