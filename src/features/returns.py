@@ -56,8 +56,13 @@ def compute_total_return(cumulative_returns: pd.Series) -> float:
     Returns:
         float: Total return computed as the final cumulative return minus 1.
     """
+    if not isinstance(cumulative_returns, pd.Series):
+        raise TypeError("cumulative_returns must be a pandas Series")
+    if len(cumulative_returns) == 0:
+        raise ValueError("cumulative_returns series cannot be empty")
+
     final_value: float = cumulative_returns.iloc[-1]
-    return final_value - 1
+    return final_value - 1.0
 
 
 def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Series:
