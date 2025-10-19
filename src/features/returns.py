@@ -1,6 +1,7 @@
 """
 Return calculation functions for Index-Coin feature engineering.
 """
+
 import pandas as pd
 
 
@@ -53,7 +54,7 @@ def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
         raise ValueError("returns series cannot be empty")
 
     numeric_returns = pd.to_numeric(returns, errors="coerce")
-    if numeric_returns.isna().any() and not returns.isna().any():
+    if (numeric_returns.isna() & ~returns.isna()).any():
         raise ValueError("returns must contain only numeric values (NaN allowed)")
 
     cumulative = pd.Series(index=returns.index, dtype=float)
@@ -62,11 +63,20 @@ def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
     cumulative.iloc[0] = 1.0
 
     # Apply each period's return at its own index
-    for i in range(1, len(returns)):
-        if pd.isna(returns.iloc[i]):
-            cumulative.iloc[i] = cumulative.iloc[i - 1]
+    for i in range(len(returns)):
+        if i == 0:
+            # For the first period, apply the return to the base value
+            if not pd.isna(returns.iloc[i]):
+                cumulative.iloc[i] = 1.0 * (1 + float(returns.iloc[i]))
+            else:
+                cumulative.iloc[i] = 1.0
         else:
-            cumulative.iloc[i] = cumulative.iloc[i - 1] * (1 + float(returns.iloc[i]))
+            if pd.isna(returns.iloc[i]):
+                cumulative.iloc[i] = cumulative.iloc[i - 1]
+            else:
+                cumulative.iloc[i] = cumulative.iloc[i - 1] * (
+                    1 + float(returns.iloc[i])
+                )
 
     return cumulative
 
