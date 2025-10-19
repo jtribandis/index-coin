@@ -5,12 +5,17 @@ import pandas as pd
 
 def compute_daily_returns(prices: pd.Series) -> pd.Series:
     """
-    Compute daily returns from price series.
-
-    Formula: r_t = (P_t / P_{t-1}) - 1
-
-    Returns a series with the SAME length and index as the input.
-    First value will be NaN (no prior price to compare).
+    Compute daily percentage returns from a price series.
+    
+    Parameters:
+        prices (pd.Series): Series of prices; must be non-empty, numeric, and contain no negative values.
+    
+    Returns:
+        pd.Series: Series of daily returns computed as (P_t / P_{t-1}) - 1 with the same index as `prices` (the first element will be `NaN`).
+    
+    Raises:
+        TypeError: If `prices` is not a pandas Series.
+        ValueError: If `prices` is empty, contains non-numeric values, or contains negative values.
     """
     if not isinstance(prices, pd.Series):
         raise TypeError("prices must be a pandas Series")
@@ -26,13 +31,17 @@ def compute_daily_returns(prices: pd.Series) -> pd.Series:
 
 def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
     """
-    Compute cumulative returns from daily returns series.
-
-    Formula: V_t = V_{t-1} * (1 + r_{t}) with V_0 = 1
-
-    Returns a series with the SAME length and index as the input.
-    Each element represents the cumulative value after applying
-    all returns up to and including that index.
+    Compute cumulative value series from periodic returns, initializing the starting value to 1.0.
+    
+    Parameters:
+        returns (pd.Series): Series of periodic returns (e.g., daily returns). NaN values are allowed and indicate missing returns.
+    
+    Returns:
+        pd.Series: Cumulative value series with the same index and length as `returns`. The first element is 1.0 and subsequent elements represent the compounded value: V_t = V_{t-1} * (1 + r_{t-1}). When a return is NaN, the cumulative value is carried forward unchanged.
+    
+    Raises:
+        TypeError: If `returns` is not a pandas Series.
+        ValueError: If `returns` is empty or contains non-numeric (non-NaN) values.
     """
     if not isinstance(returns, pd.Series):
         raise TypeError("returns must be a pandas Series")
@@ -76,9 +85,20 @@ def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Ser
 
 def compute_total_return(cumulative_returns: pd.Series) -> float:
     """
-    Compute total return from cumulative returns series.
-
-    Formula: total_return = (V_T / V_0) - 1
+    Calculate the total return by comparing final and initial cumulative values.
+    
+    Parameters:
+        cumulative_returns (pd.Series): Series of cumulative values, typically from compute_cumulative_returns.
+            The first value (V_0) represents the initial value (typically 1.0) and subsequent values track
+            the compounded growth of that initial investment.
+    
+    Returns:
+        float: Total return computed as (V_T / V_0) - 1, where V_T is the final cumulative value and
+            V_0 is the initial value. This measures the total percentage return over the entire period.
+    
+    Raises:
+        TypeError: If `cumulative_returns` is not a pandas Series.
+        ValueError: If `cumulative_returns` is empty.
     """
     if not isinstance(cumulative_returns, pd.Series):
         raise TypeError("cumulative_returns must be a pandas Series")
