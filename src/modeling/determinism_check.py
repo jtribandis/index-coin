@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
@@ -19,14 +19,14 @@ import pandas as pd
 class DeterminismChecker:
     """Verify system produces identical outputs with same seed."""
     
-    def __init__(self, seed: int = 42, date: str = "2024-01-01", verbose: bool = False):
+    def __init__(self, seed: int = 42, date: str = "2024-01-01", verbose: bool = False) -> None:
         self.seed = seed
         self.date = date
         self.verbose = verbose
         base_temp = Path(tempfile.gettempdir())
         self.run1_dir = base_temp / "determinism_run1"
         self.run2_dir = base_temp / "determinism_run2"
-        self.errors = []
+        self.errors: List[str] = []
         
     def _log(self, message: str, level: str = "INFO") -> None:
         """Print message if verbose mode is enabled."""
@@ -49,14 +49,14 @@ class DeterminismChecker:
             print(f"Run 2 directory: {self.run2_dir}")
         print()
         
-        checks = [
+        checks: List[Tuple[str, Any]] = [
             ("Model Training", self.check_model_determinism),
             ("Portfolio Simulation", self.check_portfolio_determinism),
             ("Feature Engineering", self.check_feature_determinism),
         ]
         
         all_passed = True
-        results = {}
+        results: Dict[str, Dict[str, Any]] = {}
         
         for name, check_fn in checks:
             print(f"Checking: {name}")
@@ -111,14 +111,14 @@ class DeterminismChecker:
         self._log(f"Second run completed: {output2[:100]}", "DEBUG")
         
         # Compare outputs
-        checks = [
+        checks: List[Tuple[str, Any]] = [
             ("Predictions", self._compare_predictions),
             ("Model Selection", self._compare_model_selection),
             ("Model Weights", self._compare_model_weights),
         ]
         
         all_match = True
-        details = []
+        details: List[str] = []
         
         for check_name, check_fn in checks:
             self._log(f"Comparing {check_name}...", "DEBUG")
@@ -217,7 +217,7 @@ class DeterminismChecker:
             return True, "Features identical"
         except AssertionError:
             # Check which columns differ
-            diff_cols = []
+            diff_cols: List[str] = []
             for col in features1.columns:
                 if col in features2.columns:
                     if not np.allclose(features1[col], features2[col], rtol=1e-10, atol=1e-12, equal_nan=True):
@@ -337,7 +337,7 @@ class DeterminismChecker:
         except AssertionError as e:
             # Calculate max difference
             numeric_cols = pred1.select_dtypes(include=[np.number]).columns
-            max_diffs = {}
+            max_diffs: Dict[str, Any] = {}
             for col in numeric_cols:
                 if col in pred2.columns:
                     max_diff = np.max(np.abs(pred1[col] - pred2[col]))
@@ -355,9 +355,9 @@ class DeterminismChecker:
             raise FileNotFoundError("Model selection files not found")
         
         with open(sel1_path) as f:
-            sel1 = json.load(f)
+            sel1: Dict[str, Any] = json.load(f)
         with open(sel2_path) as f:
-            sel2 = json.load(f)
+            sel2: Dict[str, Any] = json.load(f)
         
         if self.verbose:
             self._log(f"Model 1: {json.dumps(sel1, indent=2)}", "DEBUG")
@@ -369,7 +369,7 @@ class DeterminismChecker:
         
         # Check metrics within tolerance
         metrics = ['rmse', 'r2', 'mae']
-        diffs = {}
+        diffs: Dict[str, float] = {}
         for metric in metrics:
             if metric in sel1 and metric in sel2:
                 diff = abs(sel1[metric] - sel2[metric])
@@ -418,7 +418,7 @@ class DeterminismChecker:
         self._log("Created mock predicted_edge.csv", "DEBUG")
         
         # Mock model selection
-        selection = {
+        selection: Dict[str, Any] = {
             'model': 'XGBoost',
             'rmse': 0.0118,
             'r2': 0.29,
@@ -448,12 +448,12 @@ class DeterminismChecker:
         pd.DataFrame(nav_data).to_csv(output_dir / "portfolio_nav.csv", index=False)
         self._log("Created mock portfolio_nav.csv", "DEBUG")
     
-    def _save_results(self, results: Dict) -> None:
+    def _save_results(self, results: Dict[str, Dict[str, Any]]) -> None:
         """Save determinism check results to JSON."""
         output_path = Path("artifacts/reports/determinism_results.json")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        report = {
+        report: Dict[str, Any] = {
             "timestamp": pd.Timestamp.now().isoformat(),
             "seed": self.seed,
             "test_date": self.date,
