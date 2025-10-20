@@ -98,11 +98,11 @@ class MetricsValidator:
 
         print("🔍 Validating financial metrics...")
 
-        # Check bounds
-        bounds_valid = self._check_bounds(metrics)
-
-        # Check for NaN/Inf
+        # FIXED: Check finiteness FIRST to catch non-numeric, NaN, and Inf values early
         finiteness_valid = self._check_finiteness(metrics)
+
+        # Check bounds (now safe because non-numeric values are already flagged)
+        bounds_valid = self._check_bounds(metrics)
 
         # Check relationships
         relationships_valid = self._check_relationships(metrics)
@@ -111,7 +111,7 @@ class MetricsValidator:
         special_valid = self._check_special_cases(metrics)
 
         all_valid = all(
-            [bounds_valid, finiteness_valid, relationships_valid, special_valid]
+            [finiteness_valid, bounds_valid, relationships_valid, special_valid]
         )
 
         self._print_summary()
@@ -125,6 +125,12 @@ class MetricsValidator:
         for metric, value in metrics.items():
             if metric not in self.BOUNDS:
                 continue  # Skip unknown metrics
+
+            # FIXED: Guard against non-numeric values with explicit type check
+            if not isinstance(value, (int, float)):
+                # Non-numeric values should already be caught by _check_finiteness
+                # Skip here to avoid TypeError in comparisons
+                continue
 
             min_val, max_val = self.BOUNDS[metric]
 
@@ -156,7 +162,12 @@ class MetricsValidator:
         all_valid = True
 
         for metric, value in metrics.items():
+            # FIXED: Flag non-numeric values as errors instead of silently skipping
             if not isinstance(value, (int, float)):
+                self.errors.append(
+                    f"{metric} has invalid type: {type(value).__name__} (value: {value!r})"
+                )
+                all_valid = False
                 continue
 
             if np.isnan(value):
@@ -187,6 +198,10 @@ class MetricsValidator:
             dep_val = metrics[dependent]
             num_val = metrics[numerator]
             denom_val = metrics[denominator]
+
+            # FIXED: Guard against non-numeric values
+            if not all(isinstance(v, (int, float)) for v in [dep_val, num_val, denom_val]):
+                continue
 
             # Skip if dependent or numerator are infinite or NaN
             if np.isinf(dep_val) or np.isnan(dep_val):
@@ -239,9 +254,10 @@ class MetricsValidator:
         """Check special cases and common issues."""
         all_valid = True
 
+        # FIXED: Add type guards for all special case checks
         # MaxDD should be negative or zero
         if "MaxDD" in metrics:
-            if metrics["MaxDD"] > 0:
+            if isinstance(metrics["MaxDD"], (int, float)) and metrics["MaxDD"] > 0:
                 self.errors.append(
                     f"MaxDD must be non-positive: {metrics['MaxDD']:.4f}"
                 )
@@ -249,24 +265,26 @@ class MetricsValidator:
 
         # CVaR should be negative (losses)
         if "CVaR95" in metrics:
-            if metrics["CVaR95"] > 0:
+            if isinstance(metrics["CVaR95"], (int, float)) and metrics["CVaR95"] > 0:
                 self.errors.append(
                     f"CVaR95 must be non-positive: {metrics['CVaR95']:.4f}"
                 )
                 all_valid = False
 
         # Turnover warning
-        if "Turnover" in metrics and metrics["Turnover"] > 2.0:
-            self.warnings.append(
-                f"High turnover detected: {metrics['Turnover']:.2f} (>200%/yr)"
-            )
+        if "Turnover" in metrics and isinstance(metrics["Turnover"], (int, float)):
+            if metrics["Turnover"] > 2.0:
+                self.warnings.append(
+                    f"High turnover detected: {metrics['Turnover']:.2f} (>200%/yr)"
+                )
 
         # Cost drag warning
-        if "CostDrag_bps" in metrics and metrics["CostDrag_bps"] > 50:
-            self.warnings.append(f"High cost drag: {metrics['CostDrag_bps']:.1f} bps")
+        if "CostDrag_bps" in metrics and isinstance(metrics["CostDrag_bps"], (int, float)):
+            if metrics["CostDrag_bps"] > 50:
+                self.warnings.append(f"High cost drag: {metrics['CostDrag_bps']:.1f} bps")
 
         # Risk-Off percentage reasonableness
-        if "RiskOff_pct" in metrics:
+        if "RiskOff_pct" in metrics and isinstance(metrics["RiskOff_pct"], (int, float)):
             if metrics["RiskOff_pct"] > 0.5:
                 self.warnings.append(
                     f"High Risk-Off time: {metrics['RiskOff_pct']:.1%}"
@@ -276,11 +294,12 @@ class MetricsValidator:
 
         # Ulcer should be less than or comparable to |MaxDD|
         if all(k in metrics for k in ["Ulcer", "MaxDD"]):
-            if abs(metrics["MaxDD"]) > 1e-10:  # Avoid division by near-zero
-                if metrics["Ulcer"] > abs(metrics["MaxDD"]) * 1.5:
-                    self.warnings.append(
-                        f"Ulcer ({metrics['Ulcer']:.3f}) >> |MaxDD| ({abs(metrics['MaxDD']):.3f})"
-                    )
+            if all(isinstance(metrics[k], (int, float)) for k in ["Ulcer", "MaxDD"]):
+                if abs(metrics["MaxDD"]) > 1e-10:  # Avoid division by near-zero
+                    if metrics["Ulcer"] > abs(metrics["MaxDD"]) * 1.5:
+                        self.warnings.append(
+                            f"Ulcer ({metrics['Ulcer']:.3f}) >> |MaxDD| ({abs(metrics['MaxDD']):.3f})"
+                        )
 
         return all_valid
 
