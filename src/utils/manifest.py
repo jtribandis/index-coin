@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 
+# Default symbols for manifest operations
+DEFAULT_SYMBOLS = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL', 'BTC-USD']
+
+
 class ManifestGenerator:
     """Generates and validates data ingestion manifests."""
     
@@ -143,7 +147,7 @@ def generate_data_manifest(data_dir: str = "data/raw", symbols: List[str] = None
         Generated manifest dictionary
     """
     if symbols is None:
-        symbols = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL', 'BTC-USD']
+        symbols = DEFAULT_SYMBOLS
     
     generator = ManifestGenerator(data_dir)
     manifest = generator.generate_manifest(symbols)
@@ -164,7 +168,7 @@ def validate_data_manifest(data_dir: str = "data/raw", symbols: List[str] = None
         Validation results dictionary
     """
     if symbols is None:
-        symbols = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL', 'BTC-USD']
+        symbols = DEFAULT_SYMBOLS
     
     generator = ManifestGenerator(data_dir)
     return generator.validate_manifest(symbols)
