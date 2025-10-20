@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
@@ -44,7 +44,7 @@ class DeterminismChecker:
         print("🔍 Starting determinism verification...")
         print(f"Seed: {self.seed}, Test Date: {self.date}")
         if self.verbose:
-            print(f"Verbose mode: ENABLED")
+            print("Verbose mode: ENABLED")
             print(f"Run 1 directory: {self.run1_dir}")
             print(f"Run 2 directory: {self.run2_dir}")
         print()
@@ -220,7 +220,7 @@ class DeterminismChecker:
             self._log(f"Final NAV difference: ${final_diff:.2e}", "DEBUG")
             
             return True, f"NAV curves identical (final diff: ${final_diff:.2e})"
-        except AssertionError as e:
+        except AssertionError:
             max_diff = np.max(np.abs(nav1['nav_net'].values - nav2['nav_net'].values))
             self._log(f"NAV mismatch detected - max diff: ${max_diff:.2e}", "ERROR")
             return False, f"NAV mismatch (max diff: ${max_diff:.2e})"
@@ -370,7 +370,7 @@ class DeterminismChecker:
             )
             self._log("Predictions match within float tolerance", "DEBUG")
             return True, "identical within float tolerance"
-        except AssertionError as e:
+        except AssertionError:
             # Calculate max difference
             numeric_cols = pred1.select_dtypes(include=[np.number]).columns
             max_diffs: Dict[str, Any] = {}
