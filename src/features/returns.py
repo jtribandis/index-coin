@@ -101,11 +101,15 @@ def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Ser
         pd.Series: Series of annualized returns computed as (1 + r) ** periods_per_year - 1 for each input return r, aligned with the input index.
 
     Raises:
-        TypeError: If `returns` is not a pandas Series.
-        ValueError: If `periods_per_year` is not greater than 0.
+        TypeError: If `returns` is not a pandas Series or contains non-numeric dtype.
+        ValueError: If `returns` is empty or `periods_per_year` is not greater than 0.
     """
     if not isinstance(returns, pd.Series):
         raise TypeError("returns must be a pandas Series")
+    if len(returns) == 0:
+        raise ValueError("returns series cannot be empty")
+    if not pd.api.types.is_numeric_dtype(returns):
+        raise TypeError("returns must contain numeric dtype")
     if periods_per_year <= 0:
         raise ValueError("periods_per_year must be positive")
 
