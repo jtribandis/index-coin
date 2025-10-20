@@ -6,7 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import pandas as pd
 import numpy as np
 
@@ -247,12 +247,19 @@ class DataValidator:
     def _save_report(self, results: Dict) -> None:
         """Save validation report to staging directory."""
         output_path = Path('data/staging/_validation_report.json')
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        with open(output_path, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        
-        print(f"\n📄 Validation report saved to {output_path}")
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(output_path, 'w') as f:
+                json.dump(results, f, indent=2, default=str)
+            
+            print(f"\n📄 Validation report saved to {output_path}")
+        except Exception as e:
+            error_msg = f"Failed to save validation report: {e}"
+            print(f"\n❌ {error_msg}")
+            self.errors.append(f"Report save failed: {str(e)}")
+            results['status'] = 'ERROR'
         
         # Print summary
         status_emoji = "✅" if results['status'] == 'PASS' else "❌"
