@@ -203,10 +203,10 @@ class MetricsValidator:
                     
             elif rel_type == 'ratio':
                 # For Sharpe: simple ratio (assuming RF=0 already subtracted)
-                if denom_val > 1e-10:  # Avoid division by near-zero
+                if abs(denom_val) > 1e-10:  # Changed from denom_val > 1e-10 to handle potential small negative values
                     computed = num_val / denom_val
                 else:
-                    # Near-zero or negative denominator makes ratio undefined
+                    # Near-zero denominator makes ratio undefined
                     msg = (f"{dependent} ratio undefined: denominator {denominator} "
                            f"= {denom_val:.6f} too small")
                     self.warnings.append(msg)
@@ -260,7 +260,7 @@ class MetricsValidator:
         
         # Ulcer should be less than or comparable to |MaxDD|
         if all(k in metrics for k in ['Ulcer', 'MaxDD']):
-            if metrics['MaxDD'] != 0:  # Avoid division by zero
+            if abs(metrics['MaxDD']) > 1e-10:  # Avoid division by near-zero
                 if metrics['Ulcer'] > abs(metrics['MaxDD']) * 1.5:
                     self.warnings.append(
                         f"Ulcer ({metrics['Ulcer']:.3f}) >> |MaxDD| ({abs(metrics['MaxDD']):.3f})"
