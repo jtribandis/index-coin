@@ -105,31 +105,31 @@ class DeterminismChecker:
             self._create_mock_outputs(self.run2_dir)
             
             # Compare outputs
-            checks: List[Tuple[str, Any]] = [
+            mock_checks: List[Tuple[str, Any]] = [
                 ("Predictions", self._compare_predictions),
                 ("Model Selection", self._compare_model_selection),
             ]
             
             all_match = True
-            details: List[str] = []
+            mock_details: List[str] = []
             
-            for check_name, check_fn in checks:
+            for check_name, check_fn in mock_checks:
                 self._log(f"Comparing {check_name}...", "DEBUG")
                 try:
                     matches, msg = check_fn()
                     if matches:
-                        details.append(f"{check_name}: ✓ identical")
+                        mock_details.append(f"{check_name}: ✓ identical")
                         self._log(f"{check_name} match: {msg}", "DEBUG")
                     else:
-                        details.append(f"{check_name}: ✗ {msg}")
+                        mock_details.append(f"{check_name}: ✗ {msg}")
                         self._log(f"{check_name} mismatch: {msg}", "WARN")
                         all_match = False
                 except FileNotFoundError as e:
-                    details.append(f"{check_name}: ⚠️ not found ({e})")
+                    mock_details.append(f"{check_name}: ⚠️ not found ({e})")
                     self._log(f"{check_name} file not found: {e}", "WARN")
             
-            details.insert(0, "Using mock data (training module not yet implemented)")
-            return all_match, "; ".join(details)
+            mock_details.insert(0, "Using mock data (training module not yet implemented)")
+            return all_match, "; ".join(mock_details)
         
         print("  Training model twice with same seed...")
         
@@ -152,31 +152,31 @@ class DeterminismChecker:
         self._log(f"Second run completed: {output2[:100]}", "DEBUG")
         
         # Compare outputs
-        checks: List[Tuple[str, Any]] = [
+        training_checks: List[Tuple[str, Any]] = [
             ("Predictions", self._compare_predictions),
             ("Model Selection", self._compare_model_selection),
             ("Model Weights", self._compare_model_weights),
         ]
         
         all_match = True
-        details: List[str] = []
+        training_details: List[str] = []
         
-        for check_name, check_fn in checks:
+        for check_name, check_fn in training_checks:
             self._log(f"Comparing {check_name}...", "DEBUG")
             try:
                 matches, msg = check_fn()
                 if matches:
-                    details.append(f"{check_name}: ✓ identical")
+                    training_details.append(f"{check_name}: ✓ identical")
                     self._log(f"{check_name} match: {msg}", "DEBUG")
                 else:
-                    details.append(f"{check_name}: ✗ {msg}")
+                    training_details.append(f"{check_name}: ✗ {msg}")
                     self._log(f"{check_name} mismatch: {msg}", "WARN")
                     all_match = False
             except FileNotFoundError as e:
-                details.append(f"{check_name}: ⚠️ not found ({e})")
+                training_details.append(f"{check_name}: ⚠️ not found ({e})")
                 self._log(f"{check_name} file not found: {e}", "WARN")
         
-        return all_match, "; ".join(details)
+        return all_match, "; ".join(training_details)
     
     def check_portfolio_determinism(self) -> Tuple[bool, str]:
         """
