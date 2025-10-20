@@ -6,7 +6,7 @@ Tech Spec Section 8.1 - Metric definitions with valid ranges.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 
@@ -16,7 +16,7 @@ class MetricsValidator:
     # Define valid ranges for each metric
     # Note: MAR and Calmar can be infinite when MaxDD is near zero,
     # so we allow arbitrarily large values (up to infinity)
-    BOUNDS = {
+    BOUNDS: Dict[str, Tuple[float, float]] = {
         'Sharpe': (-5.0, 10.0),
         'Sortino': (-5.0, 15.0),
         'MAR': (0.0, float('inf')),  # Allow infinity for zero drawdown cases
@@ -35,18 +35,18 @@ class MetricsValidator:
     
     # Relationships between metrics
     # Format: (dependent_metric, numerator_metric, denominator_metric, relationship_type, tolerance)
-    RELATIONSHIPS = [
+    RELATIONSHIPS: List[Tuple[str, str, str, str, float]] = [
         ('MAR', 'CAGR', 'MaxDD', 'ratio_abs_denom', 0.01),      # MAR = CAGR / |MaxDD|
         ('Calmar', 'CAGR', 'MaxDD', 'ratio_abs_denom', 0.01),   # Calmar = CAGR / |MaxDD|
         ('Sharpe', 'CAGR', 'Vol', 'ratio', 0.05),               # Sharpe = CAGR / Vol (RF=0)
     ]
     
-    def __init__(self, strict: bool = False):
+    def __init__(self, strict: bool = False) -> None:
         self.strict = strict
         self.errors: List[str] = []
         self.warnings: List[str] = []
     
-    def _reset_state(self):
+    def _reset_state(self) -> None:
         """Clear accumulated errors and warnings for fresh validation."""
         self.errors = []
         self.warnings = []
@@ -68,7 +68,7 @@ class MetricsValidator:
         
         try:
             with open(path) as f:
-                metrics = json.load(f)
+                metrics: Dict[str, float] = json.load(f)
         except json.JSONDecodeError as e:
             error_msg = f"Invalid JSON in {filepath}: {e.msg} at line {e.lineno}, column {e.colno}"
             self.errors.append(error_msg)
@@ -268,7 +268,7 @@ class MetricsValidator:
         
         return all_valid
     
-    def _print_summary(self):
+    def _print_summary(self) -> None:
         """Print validation summary."""
         if not self.errors and not self.warnings:
             print("✅ All metrics within valid ranges")
@@ -285,7 +285,7 @@ class MetricsValidator:
                 print(f"  - {warn}")
 
 
-def validate_inline_metrics(**metrics) -> bool:
+def validate_inline_metrics(**metrics: float) -> bool:
     """
     Validate metrics passed as keyword arguments.
     Useful for inline checks in code.
@@ -302,7 +302,7 @@ def validate_inline_metrics(**metrics) -> bool:
     return validator.validate_metrics(metrics)
 
 
-def main():
+def main() -> None:
     """CLI entry point for metrics validation."""
     if len(sys.argv) < 2:
         print("Usage: python validate_metrics.py <path_to_metrics.json> [--strict]")
