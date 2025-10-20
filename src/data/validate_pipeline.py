@@ -7,7 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import pandas as pd
 import numpy as np
 
@@ -24,6 +24,7 @@ class DataValidator:
         self.strict = strict
         self.errors: List[str] = []
         self.warnings: List[str] = []
+        self._panel: Optional[pd.DataFrame] = None
 
     def validate_all(self) -> Dict[str, Any]:
         """Run complete validation suite."""
@@ -110,6 +111,21 @@ class DataValidator:
 
         return {"valid": True, "symbols_checked": len(self.SYMBOLS)}
 
+    def _load_panel(self) -> Optional[pd.DataFrame]:
+        """Load panel with caching to avoid redundant reads."""
+        if self._panel is not None:
+            return self._panel
+
+        panel_path = Path("data/staging/panel.parquet")
+        if not panel_path.exists():
+            return None
+
+        try:
+            self._panel = pd.read_parquet(panel_path)
+            return self._panel
+        except Exception:
+            return None
+
     def validate_panel(self) -> Dict[str, Any]:
         """Validate staging panel structure (Tech Spec 2.3)."""
         panel_path = Path("data/staging/panel.parquet")
@@ -118,10 +134,15 @@ class DataValidator:
             self.errors.append("Missing panel.parquet")
             return {"valid": False}
 
-        try:
-            panel = pd.read_parquet(panel_path)
-        except Exception as e:
-            self.errors.append(f"Failed reading panel.parquet: {e}")
+        # Reuse cached panel or load new
+        panel = self._load_panel()
+        if panel is None:
+            self.errors.append(f"Failed reading panel.parquet")
+            return {"valid": False}
+
+        # Check for empty panel
+        if panel.empty:
+            self.errors.append("Panel is empty (no rows)")
             return {"valid": False}
 
         # Check for expected columns
@@ -137,16 +158,25 @@ class DataValidator:
             self.errors.append("Panel index is not DatetimeIndex")
             return {"valid": False}
 
+        # Compute date range using min/max to handle unsorted indices
+        min_date = panel.index.min()
+        max_date = panel.index.max()
+        date_range = f"{min_date} to {max_date}"
+
         return {
             "valid": True,
             "rows": len(panel),
-            "date_range": f"{panel.index[0]} to {panel.index[-1]}",
+            "date_range": date_range,
             "columns": len(panel.columns),
         }
 
     def validate_gaps(self) -> Dict[str, Any]:
         """Check for excessive data gaps (Tech Spec 2.3)."""
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        if panel is None:
+            self.errors.append("Cannot validate gaps: panel not loaded")
+            return {"valid": False}
+
         gap_violations: List[str] = []
 
         for symbol in self.SYMBOLS:
@@ -183,7 +213,11 @@ class DataValidator:
 
     def validate_returns(self) -> Dict[str, Any]:
         """Detect extreme returns indicating data errors (Tech Spec 13.2)."""
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        if panel is None:
+            self.errors.append("Cannot validate returns: panel not loaded")
+            return {"valid": False}
+
         returns = panel.pct_change()
 
         extreme_events: List[Dict[str, Any]] = []
@@ -210,7 +244,11 @@ class DataValidator:
 
     def validate_btc_alignment(self) -> Dict[str, Any]:
         """Verify BTC 7-day data aligned to business calendar (Tech Spec 2.3)."""
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        if panel is None:
+            self.errors.append("Cannot validate BTC alignment: panel not loaded")
+            return {"valid": False}
+
         btc_col = "BTC-USD_adj"
 
         if btc_col not in panel.columns:
@@ -236,7 +274,10 @@ class DataValidator:
         """Verify dividend reinvestment calculation (Tech Spec 2.2)."""
         # This is a simplified check - in production you'd compute explicit
         # reinvestment and compare to Adjusted Close
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        if panel is None:
+            self.errors.append("Cannot validate dividends: panel not loaded")
+            return {"valid": False}
 
         etf_symbols = ["GLD", "QQQ", "SPY", "SMH", "IYR", "ANGL"]
         results: Dict[str, Dict[str, float]] = {}
