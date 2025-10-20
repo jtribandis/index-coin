@@ -19,18 +19,35 @@ import pandas as pd
 class DeterminismChecker:
     """Verify system produces identical outputs with same seed."""
     
-    def __init__(self, seed: int = 42, date: str = "2024-01-01"):
+    def __init__(self, seed: int = 42, date: str = "2024-01-01", verbose: bool = False):
         self.seed = seed
         self.date = date
+        self.verbose = verbose
         base_temp = Path(tempfile.gettempdir())
         self.run1_dir = base_temp / "determinism_run1"
         self.run2_dir = base_temp / "determinism_run2"
         self.errors = []
         
+    def _log(self, message: str, level: str = "INFO") -> None:
+        """Print message if verbose mode is enabled."""
+        if self.verbose:
+            prefix = {
+                "DEBUG": "  🔍",
+                "INFO": "  ℹ️",
+                "WARN": "  ⚠️",
+                "ERROR": "  ❌"
+            }.get(level, "  ")
+            print(f"{prefix} {message}")
+        
     def check_all(self) -> bool:
         """Run complete determinism verification suite."""
         print("🔍 Starting determinism verification...")
-        print(f"Seed: {self.seed}, Test Date: {self.date}\n")
+        print(f"Seed: {self.seed}, Test Date: {self.date}")
+        if self.verbose:
+            print(f"Verbose mode: ENABLED")
+            print(f"Run 1 directory: {self.run1_dir}")
+            print(f"Run 2 directory: {self.run2_dir}")
+        print()
         
         checks = [
             ("Model Training", self.check_model_determinism),
@@ -76,17 +93,22 @@ class DeterminismChecker:
         print("  Training model twice with same seed...")
         
         # Clean previous runs
+        self._log("Cleaning previous run directories", "DEBUG")
         self._clean_dirs()
         
         # Run 1
+        self._log(f"Starting first training run in {self.run1_dir}", "DEBUG")
         success1, output1 = self._run_training(self.run1_dir)
         if not success1:
             return False, f"First training run failed: {output1}"
+        self._log(f"First run completed: {output1[:100]}", "DEBUG")
         
         # Run 2
+        self._log(f"Starting second training run in {self.run2_dir}", "DEBUG")
         success2, output2 = self._run_training(self.run2_dir)
         if not success2:
             return False, f"Second training run failed: {output2}"
+        self._log(f"Second run completed: {output2[:100]}", "DEBUG")
         
         # Compare outputs
         checks = [
@@ -99,15 +121,19 @@ class DeterminismChecker:
         details = []
         
         for check_name, check_fn in checks:
+            self._log(f"Comparing {check_name}...", "DEBUG")
             try:
                 matches, msg = check_fn()
                 if matches:
                     details.append(f"{check_name}: ✓ identical")
+                    self._log(f"{check_name} match: {msg}", "DEBUG")
                 else:
                     details.append(f"{check_name}: ✗ {msg}")
+                    self._log(f"{check_name} mismatch: {msg}", "WARN")
                     all_match = False
             except FileNotFoundError as e:
                 details.append(f"{check_name}: ⚠️ not found ({e})")
+                self._log(f"{check_name} file not found: {e}", "WARN")
         
         return all_match, "; ".join(details)
     
@@ -124,11 +150,16 @@ class DeterminismChecker:
         nav1_path = self.run1_dir / "portfolio_nav.csv"
         nav2_path = self.run2_dir / "portfolio_nav.csv"
         
+        self._log(f"Looking for NAV files at {nav1_path} and {nav2_path}", "DEBUG")
+        
         if not nav1_path.exists() or not nav2_path.exists():
+            self._log("NAV files not found - skipping portfolio check", "INFO")
             return True, "NAV files not generated (may be optional)"
         
         nav1 = pd.read_csv(nav1_path)
         nav2 = pd.read_csv(nav2_path)
+        
+        self._log(f"NAV 1 shape: {nav1.shape}, NAV 2 shape: {nav2.shape}", "DEBUG")
         
         # Compare NAV values with tight tolerance
         try:
@@ -142,10 +173,12 @@ class DeterminismChecker:
             
             # Check final values match exactly
             final_diff = abs(nav1['nav_net'].iloc[-1] - nav2['nav_net'].iloc[-1])
+            self._log(f"Final NAV difference: ${final_diff:.2e}", "DEBUG")
             
             return True, f"NAV curves identical (final diff: ${final_diff:.2e})"
         except AssertionError as e:
             max_diff = np.max(np.abs(nav1['nav_net'].values - nav2['nav_net'].values))
+            self._log(f"NAV mismatch detected - max diff: ${max_diff:.2e}", "ERROR")
             return False, f"NAV mismatch (max diff: ${max_diff:.2e})"
     
     def check_feature_determinism(self) -> Tuple[bool, str]:
@@ -161,11 +194,16 @@ class DeterminismChecker:
         features1_path = self.run1_dir / "features.csv"
         features2_path = self.run2_dir / "features.csv"
         
+        self._log(f"Looking for feature files at {features1_path} and {features2_path}", "DEBUG")
+        
         if not features1_path.exists() or not features2_path.exists():
+            self._log("Feature files not found - skipping feature check", "INFO")
             return True, "Feature files not generated (may be optional)"
         
         features1 = pd.read_csv(features1_path)
         features2 = pd.read_csv(features2_path)
+        
+        self._log(f"Features 1 shape: {features1.shape}, Features 2 shape: {features2.shape}", "DEBUG")
         
         try:
             pd.testing.assert_frame_equal(
@@ -175,6 +213,7 @@ class DeterminismChecker:
                 rtol=1e-10,
                 atol=1e-12
             )
+            self._log("Features match perfectly", "DEBUG")
             return True, "Features identical"
         except AssertionError:
             # Check which columns differ
@@ -183,6 +222,9 @@ class DeterminismChecker:
                 if col in features2.columns:
                     if not np.allclose(features1[col], features2[col], rtol=1e-10, atol=1e-12, equal_nan=True):
                         diff_cols.append(col)
+                        if self.verbose:
+                            max_diff = np.max(np.abs(features1[col] - features2[col]))
+                            self._log(f"Column '{col}' differs - max diff: {max_diff:.2e}", "WARN")
             
             return False, f"Features differ in columns: {diff_cols}"
     
@@ -198,6 +240,8 @@ class DeterminismChecker:
             "--seed", str(self.seed)
         ]
         
+        self._log(f"Running command: {' '.join(cmd)}", "DEBUG")
+        
         try:
             result = subprocess.run(
                 cmd,
@@ -208,16 +252,21 @@ class DeterminismChecker:
             )
             
             if result.returncode != 0:
+                self._log(f"Training failed with return code {result.returncode}", "ERROR")
+                if self.verbose:
+                    self._log(f"STDERR: {result.stderr}", "ERROR")
                 return False, result.stderr[:500]
             
             return True, result.stdout[:200]
             
         except subprocess.TimeoutExpired:
+            self._log("Training timed out after 5 minutes", "ERROR")
             return False, "Training timed out (>5 min)"
             
         except FileNotFoundError:
             # Training module doesn't exist - create mock outputs for testing
             print("  ⚠️ Training module not found - creating mock outputs for testing")
+            self._log("Creating mock outputs for determinism testing", "INFO")
             self._create_mock_outputs(output_dir)
             return True, "Mock outputs created (training module not found)"
     
@@ -232,9 +281,12 @@ class DeterminismChecker:
         pred1 = pd.read_csv(pred1_path)
         pred2 = pd.read_csv(pred2_path)
         
+        self._log(f"Predictions shape: {pred1.shape}", "DEBUG")
+        
         # Try exact match first
         try:
             pd.testing.assert_frame_equal(pred1, pred2, check_exact=True)
+            self._log("Predictions match bit-for-bit", "DEBUG")
             return True, "bit-for-bit identical"
         except AssertionError:
             pass
@@ -247,6 +299,7 @@ class DeterminismChecker:
                 rtol=1e-10,
                 atol=1e-12
             )
+            self._log("Predictions match within float tolerance", "DEBUG")
             return True, "identical within float tolerance"
         except AssertionError as e:
             # Calculate max difference
@@ -256,6 +309,7 @@ class DeterminismChecker:
                 if col in pred2.columns:
                     max_diff = np.max(np.abs(pred1[col] - pred2[col]))
                     max_diffs[col] = max_diff
+                    self._log(f"Column '{col}' max diff: {max_diff:.2e}", "WARN")
             
             return False, f"max diffs: {max_diffs}"
     
@@ -272,6 +326,10 @@ class DeterminismChecker:
         with open(sel2_path) as f:
             sel2 = json.load(f)
         
+        if self.verbose:
+            self._log(f"Model 1: {json.dumps(sel1, indent=2)}", "DEBUG")
+            self._log(f"Model 2: {json.dumps(sel2, indent=2)}", "DEBUG")
+        
         # Check model names match
         if sel1.get('model') != sel2.get('model'):
             return False, f"different models: {sel1['model']} vs {sel2['model']}"
@@ -283,6 +341,7 @@ class DeterminismChecker:
             if metric in sel1 and metric in sel2:
                 diff = abs(sel1[metric] - sel2[metric])
                 diffs[metric] = diff
+                self._log(f"Metric '{metric}' diff: {diff:.2e}", "DEBUG")
                 if diff > 1e-6:
                     return False, f"{metric} differs by {diff:.2e}"
         
@@ -295,21 +354,26 @@ class DeterminismChecker:
         
         if not weights1_path.exists() or not weights2_path.exists():
             # Weights file optional - rely on prediction comparison
+            self._log("Model weights files not found - skipping", "INFO")
             return True, "weights file not generated (optional)"
         
         # For actual implementation, would load and compare model weights
         # This depends on model framework (sklearn, xgboost, etc.)
+        self._log("Weights comparison not implemented", "WARN")
         return True, "weights comparison not implemented"
     
     def _clean_dirs(self) -> None:
         """Remove previous test runs."""
         for dir_path in [self.run1_dir, self.run2_dir]:
             if dir_path.exists():
+                self._log(f"Removing directory: {dir_path}", "DEBUG")
                 shutil.rmtree(dir_path)
     
     def _create_mock_outputs(self, output_dir: Path) -> None:
         """Create mock outputs for testing when training module unavailable."""
         np.random.seed(self.seed)  # Critical: use consistent seed
+        
+        self._log(f"Creating mock outputs in {output_dir}", "DEBUG")
         
         # Mock predicted edge
         symbols = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL', 'BTC-USD']
@@ -318,6 +382,7 @@ class DeterminismChecker:
             'predicted_return': np.random.randn(len(symbols)) * 0.01  # Small returns
         }
         pd.DataFrame(pred_data).to_csv(output_dir / "predicted_edge.csv", index=False)
+        self._log("Created mock predicted_edge.csv", "DEBUG")
         
         # Mock model selection
         selection = {
@@ -330,6 +395,7 @@ class DeterminismChecker:
         }
         with open(output_dir / "model_selection.json", 'w') as f:
             json.dump(selection, f, indent=2)
+        self._log("Created mock model_selection.json", "DEBUG")
         
         # Mock features (optional)
         feature_data = {
@@ -339,6 +405,7 @@ class DeterminismChecker:
             'ulcer': np.abs(np.random.randn(10)) * 0.1
         }
         pd.DataFrame(feature_data).to_csv(output_dir / "features.csv", index=False)
+        self._log("Created mock features.csv", "DEBUG")
         
         # Mock NAV (optional)
         nav_data = {
@@ -346,6 +413,7 @@ class DeterminismChecker:
             'nav_net': 10000 * np.cumprod(1 + np.random.randn(252) * 0.01)
         }
         pd.DataFrame(nav_data).to_csv(output_dir / "portfolio_nav.csv", index=False)
+        self._log("Created mock portfolio_nav.csv", "DEBUG")
     
     def _save_results(self, results: Dict) -> None:
         """Save determinism check results to JSON."""
@@ -356,6 +424,7 @@ class DeterminismChecker:
             "timestamp": pd.Timestamp.now().isoformat(),
             "seed": self.seed,
             "test_date": self.date,
+            "verbose": self.verbose,
             "results": results,
             "errors": self.errors,
             "overall_pass": all(r.get("passed", False) for r in results.values())
@@ -365,6 +434,7 @@ class DeterminismChecker:
             json.dump(report, f, indent=2)
         
         print(f"📄 Results saved to {output_path}")
+        self._log(f"Full report: {json.dumps(report, indent=2)}", "DEBUG")
 
 
 def main() -> None:
@@ -386,12 +456,12 @@ def main() -> None:
     parser.add_argument(
         '--verbose',
         action='store_true',
-        help='Print detailed output'
+        help='Print detailed debug output and intermediate results'
     )
     
     args = parser.parse_args()
     
-    checker = DeterminismChecker(seed=args.seed, date=args.date)
+    checker = DeterminismChecker(seed=args.seed, date=args.date, verbose=args.verbose)
     passed = checker.check_all()
     
     if passed:
