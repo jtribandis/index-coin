@@ -55,52 +55,26 @@ class DataValidator:
             self.errors.append("Missing _ingest_manifest.json")
             return {'valid': False}
         
-        # Load manifest with exception handling
-        try:
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-        except FileNotFoundError:
-            self.errors.append("Manifest file not found during read")
-            return {'valid': False}
-        except PermissionError:
-            self.errors.append("Permission denied reading manifest file")
-            return {'valid': False}
-        except json.JSONDecodeError as e:
-            self.errors.append(f"Invalid JSON in manifest file: {e}")
-            return {'valid': False}
+        with open(manifest_path) as f:
+            manifest = json.load(f)
         
         mismatches = []
-        file_errors = []
-        
         for symbol in self.SYMBOLS:
             file_path = Path(f'data/raw/{symbol}.csv')
             if not file_path.exists():
-                error_msg = f"Missing raw data file: {symbol}.csv"
-                self.errors.append(error_msg)
-                file_errors.append(error_msg)
+                self.errors.append(f"Missing raw data file: {symbol}.csv")
                 continue
-            
-            # Read file with exception handling
-            try:
-                with open(file_path, 'rb') as f:
-                    actual_hash = hashlib.sha256(f.read()).hexdigest()
-            except OSError as e:
-                error_msg = f"Cannot read {symbol}.csv: {e}"
-                self.errors.append(error_msg)
-                file_errors.append(error_msg)
-                continue
+                
+            with open(file_path, 'rb') as f:
+                actual_hash = hashlib.sha256(f.read()).hexdigest()
             
             expected = manifest.get(symbol, {}).get('sha256')
             if expected and actual_hash != expected:
-                mismatch_msg = f"{symbol}: hash mismatch"
-                mismatches.append(mismatch_msg)
+                mismatches.append(f"{symbol}: hash mismatch")
         
         if mismatches:
             self.errors.extend(mismatches)
-            return {'valid': False, 'mismatches': mismatches, 'file_errors': file_errors}
-        
-        if file_errors:
-            return {'valid': False, 'file_errors': file_errors}
+            return {'valid': False, 'mismatches': mismatches}
         
         return {'valid': True, 'symbols_checked': len(self.SYMBOLS)}
     
@@ -112,7 +86,11 @@ class DataValidator:
             self.errors.append("Missing panel.parquet")
             return {'valid': False}
         
-        panel = pd.read_parquet(panel_path)
+        try:
+            panel = pd.read_parquet(panel_path)
+        except Exception as e:
+            self.errors.append(f"Failed reading panel.parquet: {e}")
+            return {'valid': False}
         
         # Check for expected columns
         expected_cols = [f"{sym}_adj" for sym in self.SYMBOLS]
