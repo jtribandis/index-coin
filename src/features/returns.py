@@ -40,9 +40,9 @@ def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
         returns (pd.Series): Series of periodic returns (e.g., daily returns). NaN values are allowed and indicate missing returns.
 
     Returns:
-        pd.Series: Cumulative value series with the same index and length as `returns`. 
+        pd.Series: Cumulative value series with the same index and length as `returns`.
         - If the first return is not NaN, the first element is 1 + first_return
-        - If the first return is NaN, the first element is 1.0 and subsequent elements represent the compounded value: V_t = V_{t-1} * (1 + r_{t-1}). 
+        - If the first return is NaN, the first element is 1.0 and subsequent elements represent the compounded value: V_t = V_{t-1} * (1 + r_{t-1}).
         When a return is NaN, the cumulative value is carried forward unchanged.
 
     Raises:
