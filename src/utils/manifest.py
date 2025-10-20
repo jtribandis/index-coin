@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -55,8 +56,16 @@ class ManifestGenerator:
 
     def save_manifest(self, manifest: Dict[str, Any]) -> None:
         """Save manifest to JSON file."""
-        with open(self.manifest_path, "w") as f:
-            json.dump(manifest, f, indent=2)
+        try:
+            # Ensure parent directory exists
+            os.makedirs(os.path.dirname(self.manifest_path), exist_ok=True)
+            
+            with open(self.manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2)
+        except (PermissionError, OSError, IOError) as e:
+            error_msg = f"Failed to save manifest to {self.manifest_path}: {e}"
+            print(f"Error: {error_msg}")
+            raise RuntimeError(error_msg) from e
 
     def load_manifest(self) -> Optional[Dict[str, Any]]:
         """Load existing manifest from JSON file."""
