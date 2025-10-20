@@ -6,7 +6,7 @@ Tech Spec Section 8.1 - Metric definitions with valid ranges.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import numpy as np
 
 
@@ -183,6 +183,8 @@ class MetricsValidator:
                 continue
             
             # Compute expected value based on relationship type
+            computed: Optional[float] = None
+            
             if rel_type == 'ratio_abs_denom':
                 # For MAR/Calmar: ratio with absolute value of denominator
                 computed = metrics[numerator] / abs(metrics[denominator])
@@ -191,19 +193,24 @@ class MetricsValidator:
                 if metrics[denominator] > 0:
                     computed = metrics[numerator] / metrics[denominator]
                 else:
-                    computed = 0  # Avoid division by zero
+                    # Non-positive denominator makes ratio undefined
+                    msg = (f"{dependent} ratio undefined: denominator {denominator} "
+                           f"= {metrics[denominator]} <= 0")
+                    self.warnings.append(msg)
+                    continue  # Skip consistency check for undefined ratio
             else:
                 self.warnings.append(f"Unknown relationship type: {rel_type}")
                 continue
             
-            # Check consistency
-            if not np.isclose(metrics[dependent], computed, rtol=rtol):
-                msg = f"{dependent} inconsistent: {metrics[dependent]:.3f} vs computed {computed:.3f}"
-                if self.strict:
-                    self.errors.append(msg)
-                    all_valid = False
-                else:
-                    self.warnings.append(msg)
+            # Check consistency (only if computed value is defined)
+            if computed is not None and not np.isnan(computed):
+                if not np.isclose(metrics[dependent], computed, rtol=rtol):
+                    msg = f"{dependent} inconsistent: {metrics[dependent]:.3f} vs computed {computed:.3f}"
+                    if self.strict:
+                        self.errors.append(msg)
+                        all_valid = False
+                    else:
+                        self.warnings.append(msg)
         
         return all_valid
     
