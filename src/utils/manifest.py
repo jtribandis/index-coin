@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -30,38 +31,37 @@ class ManifestGenerator:
         
         for symbol in symbols:
             file_path = self.data_dir / f"{symbol}.csv"
-            
-            try:
-                if file_path.exists():
-                    with open(file_path, 'rb') as f:
-                        file_hash = hashlib.sha256(f.read()).hexdigest()
-                    
-                    manifest["symbols"][symbol] = {
-                        "file": f"{symbol}.csv",
-                        "sha256": file_hash,
-                        "size_bytes": file_path.stat().st_size
-                    }
-                else:
-                    manifest["symbols"][symbol] = {
-                        "file": f"{symbol}.csv",
-                        "sha256": None,
-                        "size_bytes": 0,
-                        "error": "File not found"
-                    }
-            except OSError as e:
+            if file_path.exists():
+                with open(file_path, 'rb') as f:
+                    file_hash = hashlib.sha256(f.read()).hexdigest()
+                
+                manifest["symbols"][symbol] = {
+                    "file": f"{symbol}.csv",
+                    "sha256": file_hash,
+                    "size_bytes": file_path.stat().st_size
+                }
+            else:
                 manifest["symbols"][symbol] = {
                     "file": f"{symbol}.csv",
                     "sha256": None,
                     "size_bytes": 0,
-                    "error": str(e)
+                    "error": "File not found"
                 }
         
         return manifest
     
     def save_manifest(self, manifest: Dict) -> None:
         """Save manifest to JSON file."""
-        with open(self.manifest_path, 'w') as f:
-            json.dump(manifest, f, indent=2)
+        # Ensure parent directory exists
+        os.makedirs(os.path.dirname(self.manifest_path), exist_ok=True)
+        
+        try:
+            with open(self.manifest_path, 'w') as f:
+                json.dump(manifest, f, indent=2)
+        except (PermissionError, OSError, IOError) as e:
+            error_msg = f"Failed to write manifest to {self.manifest_path}: {e}"
+            print(f"ERROR: {error_msg}")
+            raise RuntimeError(error_msg) from e
     
     def load_manifest(self) -> Optional[Dict]:
         """Load existing manifest from JSON file."""
