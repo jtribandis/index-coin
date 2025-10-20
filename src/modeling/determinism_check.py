@@ -90,6 +90,47 @@ class DeterminismChecker:
         - Same seed → identical model selection
         - Bit-for-bit reproducibility
         """
+        # Check if training module exists
+        training_module_exists = self._check_training_module_exists()
+        
+        if not training_module_exists:
+            print("  ⚠️ Training module not implemented yet - creating mock outputs for testing")
+            self._log("Creating mock outputs for determinism testing", "INFO")
+            
+            # Clean previous runs
+            self._clean_dirs()
+            
+            # Create mock outputs twice
+            self._create_mock_outputs(self.run1_dir)
+            self._create_mock_outputs(self.run2_dir)
+            
+            # Compare outputs
+            checks: List[Tuple[str, Any]] = [
+                ("Predictions", self._compare_predictions),
+                ("Model Selection", self._compare_model_selection),
+            ]
+            
+            all_match = True
+            details: List[str] = []
+            
+            for check_name, check_fn in checks:
+                self._log(f"Comparing {check_name}...", "DEBUG")
+                try:
+                    matches, msg = check_fn()
+                    if matches:
+                        details.append(f"{check_name}: ✓ identical")
+                        self._log(f"{check_name} match: {msg}", "DEBUG")
+                    else:
+                        details.append(f"{check_name}: ✗ {msg}")
+                        self._log(f"{check_name} mismatch: {msg}", "WARN")
+                        all_match = False
+                except FileNotFoundError as e:
+                    details.append(f"{check_name}: ⚠️ not found ({e})")
+                    self._log(f"{check_name} file not found: {e}", "WARN")
+            
+            details.insert(0, "Using mock data (training module not yet implemented)")
+            return all_match, "; ".join(details)
+        
         print("  Training model twice with same seed...")
         
         # Clean previous runs
@@ -232,16 +273,6 @@ class DeterminismChecker:
         """Execute model training with specified output directory."""
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Check if training module exists
-        training_module_exists = self._check_training_module_exists()
-        
-        if not training_module_exists:
-            # Training module doesn't exist - create mock outputs for testing
-            print("  ⚠️ Training module not found - creating mock outputs for testing")
-            self._log("Creating mock outputs for determinism testing", "INFO")
-            self._create_mock_outputs(output_dir)
-            return True, "Mock outputs created (training module not found)"
-        
         # Try to run actual training module
         cmd = [
             sys.executable, "-m", "src.modeling.train",
@@ -285,7 +316,9 @@ class DeterminismChecker:
         for path in possible_paths:
             if path.exists():
                 self._log(f"Found module file: {path}", "DEBUG")
-                return True
+                # Also verify the train module specifically exists
+                if path.name == "train.py":
+                    return True
         
         # Try importing as a fallback check
         try:
