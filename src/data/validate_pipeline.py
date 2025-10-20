@@ -68,7 +68,7 @@ class DataValidator:
             with open(file_path, 'rb') as f:
                 actual_hash = hashlib.sha256(f.read()).hexdigest()
             
-            expected = manifest.get(symbol, {}).get('sha256')
+            expected = manifest.get("symbols", {}).get(symbol, {}).get("sha256")
             if expected and actual_hash != expected:
                 mismatches.append(f"{symbol}: hash mismatch")
         
