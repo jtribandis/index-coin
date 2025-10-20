@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import numpy as np
@@ -20,8 +21,9 @@ class DeterminismChecker:
     def __init__(self, seed: int = 42, date: str = "2024-01-01"):
         self.seed = seed
         self.date = date
-        self.run1_dir = Path("/tmp/determinism_run1")
-        self.run2_dir = Path("/tmp/determinism_run2")
+        base_temp = Path(tempfile.gettempdir())
+        self.run1_dir = base_temp / "determinism_run1"
+        self.run2_dir = base_temp / "determinism_run2"
         self.errors = []
         
     def check_all(self) -> bool:
