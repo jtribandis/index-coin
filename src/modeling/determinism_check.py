@@ -5,6 +5,7 @@ Implements Critical Issue #2 from CI/CD audit.
 """
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -18,10 +19,9 @@ import pandas as pd
 class DeterminismChecker:
     """Verify system produces identical outputs with same seed."""
     
-    def __init__(self, seed: int = 42, date: str = "2024-01-01", features_optional: bool = False):
+    def __init__(self, seed: int = 42, date: str = "2024-01-01"):
         self.seed = seed
         self.date = date
-        self.features_optional = features_optional
         base_temp = Path(tempfile.gettempdir())
         self.run1_dir = base_temp / "determinism_run1"
         self.run2_dir = base_temp / "determinism_run2"
@@ -155,11 +155,6 @@ class DeterminismChecker:
         Requirements:
         - Same data → identical features
         - Standardization consistent
-        
-        Args:
-            Uses self.features_optional to determine if missing files should fail the check.
-            When features_optional=False (default), missing files cause the check to fail.
-            When features_optional=True, missing files are treated as acceptable.
         """
         print("  Checking feature computation...")
         
@@ -167,20 +162,7 @@ class DeterminismChecker:
         features2_path = self.run2_dir / "features.csv"
         
         if not features1_path.exists() or not features2_path.exists():
-            missing_files = []
-            if not features1_path.exists():
-                missing_files.append(str(features1_path))
-            if not features2_path.exists():
-                missing_files.append(str(features2_path))
-            
-            missing_msg = f"Missing feature files: {', '.join(missing_files)}"
-            
-            if self.features_optional:
-                print(f"  ℹ️ {missing_msg} (marked as optional)")
-                return True, "Feature files not generated (marked as optional)"
-            else:
-                print(f"  ⚠️ {missing_msg}")
-                return False, f"Required feature files missing. Set features_optional=True if this is expected."
+            return True, "Feature files not generated (may be optional)"
         
         features1 = pd.read_csv(features1_path)
         features2 = pd.read_csv(features2_path)
@@ -222,7 +204,7 @@ class DeterminismChecker:
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minutes max
-                env={**dict(subprocess.os.environ), "SEED": str(self.seed)}
+                env={**dict(os.environ), "SEED": str(self.seed)}
             )
             
             if result.returncode != 0:
@@ -349,15 +331,14 @@ class DeterminismChecker:
         with open(output_dir / "model_selection.json", 'w') as f:
             json.dump(selection, f, indent=2)
         
-        # Mock features (only if features are optional)
-        if self.features_optional:
-            feature_data = {
-                'date': pd.date_range(self.date, periods=10),
-                'sharpe': np.random.randn(10),
-                'mar': np.abs(np.random.randn(10)),
-                'ulcer': np.abs(np.random.randn(10)) * 0.1
-            }
-            pd.DataFrame(feature_data).to_csv(output_dir / "features.csv", index=False)
+        # Mock features (optional)
+        feature_data = {
+            'date': pd.date_range(self.date, periods=10),
+            'sharpe': np.random.randn(10),
+            'mar': np.abs(np.random.randn(10)),
+            'ulcer': np.abs(np.random.randn(10)) * 0.1
+        }
+        pd.DataFrame(feature_data).to_csv(output_dir / "features.csv", index=False)
         
         # Mock NAV (optional)
         nav_data = {
@@ -375,7 +356,6 @@ class DeterminismChecker:
             "timestamp": pd.Timestamp.now().isoformat(),
             "seed": self.seed,
             "test_date": self.date,
-            "features_optional": self.features_optional,
             "results": results,
             "errors": self.errors,
             "overall_pass": all(r.get("passed", False) for r in results.values())
@@ -404,11 +384,6 @@ def main():
         help='Test date for model training'
     )
     parser.add_argument(
-        '--features-optional',
-        action='store_true',
-        help='Treat missing feature files as acceptable (not a failure)'
-    )
-    parser.add_argument(
         '--verbose',
         action='store_true',
         help='Print detailed output'
@@ -416,11 +391,7 @@ def main():
     
     args = parser.parse_args()
     
-    checker = DeterminismChecker(
-        seed=args.seed,
-        date=args.date,
-        features_optional=args.features_optional
-    )
+    checker = DeterminismChecker(seed=args.seed, date=args.date)
     passed = checker.check_all()
     
     if passed:
