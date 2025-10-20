@@ -3,7 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 # Default symbols for manifest operations
@@ -13,11 +13,11 @@ DEFAULT_SYMBOLS = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL', 'BTC-USD']
 class ManifestGenerator:
     """Generates and validates data ingestion manifests."""
     
-    def __init__(self, data_dir: str = "data/raw"):
+    def __init__(self, data_dir: str = "data/raw") -> None:
         self.data_dir = Path(data_dir)
         self.manifest_path = self.data_dir / "_ingest_manifest.json"
     
-    def generate_manifest(self, symbols: List[str]) -> Dict:
+    def generate_manifest(self, symbols: List[str]) -> Dict[str, Any]:
         """
         Generate manifest with file checksums for given symbols.
         
@@ -27,7 +27,7 @@ class ManifestGenerator:
         Returns:
             Dictionary containing manifest data
         """
-        manifest = {
+        manifest: Dict[str, Any] = {
             "generated_at": None,  # Will be set by caller if needed
             "symbols": {}
         }
@@ -53,26 +53,27 @@ class ManifestGenerator:
         
         return manifest
     
-    def save_manifest(self, manifest: Dict) -> None:
+    def save_manifest(self, manifest: Dict[str, Any]) -> None:
         """Save manifest to JSON file."""
         with open(self.manifest_path, 'w') as f:
             json.dump(manifest, f, indent=2)
     
-    def load_manifest(self) -> Optional[Dict]:
+    def load_manifest(self) -> Optional[Dict[str, Any]]:
         """Load existing manifest from JSON file."""
         if not self.manifest_path.exists():
             return None
         
         try:
             with open(self.manifest_path, 'r') as f:
-                return json.load(f)
+                result: Dict[str, Any] = json.load(f)
+                return result
         except json.JSONDecodeError as e:
             # Log the error if you have a logger configured
             # logger.error(f"Failed to parse manifest file: {e}")
             print(f"Warning: Failed to parse manifest file {self.manifest_path}: {e}")
             return None
     
-    def validate_manifest(self, symbols: List[str]) -> Dict:
+    def validate_manifest(self, symbols: List[str]) -> Dict[str, Any]:
         """
         Validate manifest against current files.
         
@@ -86,7 +87,7 @@ class ManifestGenerator:
         if not manifest:
             return {"valid": False, "error": "Manifest not found"}
         
-        results = {
+        results: Dict[str, Any] = {
             "valid": True,
             "mismatches": [],
             "missing_files": [],
@@ -135,7 +136,7 @@ class ManifestGenerator:
         return results
 
 
-def generate_data_manifest(data_dir: str = "data/raw", symbols: List[str] = None) -> Dict:
+def generate_data_manifest(data_dir: str = "data/raw", symbols: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Convenience function to generate manifest for data directory.
     
@@ -156,7 +157,7 @@ def generate_data_manifest(data_dir: str = "data/raw", symbols: List[str] = None
     return manifest
 
 
-def validate_data_manifest(data_dir: str = "data/raw", symbols: List[str] = None) -> Dict:
+def validate_data_manifest(data_dir: str = "data/raw", symbols: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Convenience function to validate existing manifest.
     
