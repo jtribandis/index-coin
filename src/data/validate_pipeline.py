@@ -6,7 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any, Optional
 import pandas as pd
 import numpy as np
 
@@ -19,16 +19,16 @@ class DataValidator:
     BTC_WEEKLY_MIN_DAYS = 5
     EXTREME_RETURN_THRESHOLD = 0.50  # 50% daily move signals data error
     
-    def __init__(self, strict: bool = False):
+    def __init__(self, strict: bool = False) -> None:
         self.strict = strict
         self.errors: List[str] = []
         self.warnings: List[str] = []
         
-    def validate_all(self) -> Dict:
+    def validate_all(self) -> Dict[str, Any]:
         """Run complete validation suite."""
         print("🔍 Starting data validation pipeline...")
         
-        results = {
+        results: Dict[str, Any] = {
             'manifest_check': self.validate_manifest(),
             'panel_integrity': self.validate_panel(),
             'gap_analysis': self.validate_gaps(),
@@ -47,7 +47,7 @@ class DataValidator:
         self._save_report(results)
         return results
     
-    def validate_manifest(self) -> Dict:
+    def validate_manifest(self) -> Dict[str, Any]:
         """Validate ingest manifest checksums (Tech Spec 2.4)."""
         manifest_path = Path('data/raw/_ingest_manifest.json')
         
@@ -58,7 +58,7 @@ class DataValidator:
         with open(manifest_path) as f:
             manifest = json.load(f)
         
-        mismatches = []
+        mismatches: List[str] = []
         for symbol in self.SYMBOLS:
             file_path = Path(f'data/raw/{symbol}.csv')
             if not file_path.exists():
@@ -78,7 +78,7 @@ class DataValidator:
         
         return {'valid': True, 'symbols_checked': len(self.SYMBOLS)}
     
-    def validate_panel(self) -> Dict:
+    def validate_panel(self) -> Dict[str, Any]:
         """Validate staging panel structure (Tech Spec 2.3)."""
         panel_path = Path('data/staging/panel.parquet')
         
@@ -112,10 +112,10 @@ class DataValidator:
             'columns': len(panel.columns)
         }
     
-    def validate_gaps(self) -> Dict:
+    def validate_gaps(self) -> Dict[str, Any]:
         """Check for excessive data gaps (Tech Spec 2.3)."""
         panel = pd.read_parquet('data/staging/panel.parquet')
-        gap_violations = []
+        gap_violations: List[str] = []
         
         for symbol in self.SYMBOLS:
             col = f"{symbol}_adj"
@@ -149,12 +149,12 @@ class DataValidator:
             'violations': gap_violations
         }
     
-    def validate_returns(self) -> Dict:
+    def validate_returns(self) -> Dict[str, Any]:
         """Detect extreme returns indicating data errors (Tech Spec 13.2)."""
         panel = pd.read_parquet('data/staging/panel.parquet')
         returns = panel.pct_change()
         
-        extreme_events = []
+        extreme_events: List[Dict[str, Any]] = []
         for symbol in self.SYMBOLS:
             col = f"{symbol}_adj"
             if col not in returns.columns:
@@ -177,7 +177,7 @@ class DataValidator:
             'extreme_events': extreme_events
         }
     
-    def validate_btc_alignment(self) -> Dict:
+    def validate_btc_alignment(self) -> Dict[str, Any]:
         """Verify BTC 7-day data aligned to business calendar (Tech Spec 2.3)."""
         panel = pd.read_parquet('data/staging/panel.parquet')
         btc_col = 'BTC-USD_adj'
@@ -201,14 +201,14 @@ class DataValidator:
             'min_weekly_obs': int(btc_weekly.min())
         }
     
-    def validate_dividends(self) -> Dict:
+    def validate_dividends(self) -> Dict[str, Any]:
         """Verify dividend reinvestment calculation (Tech Spec 2.2)."""
         # This is a simplified check - in production you'd compute explicit
         # reinvestment and compare to Adjusted Close
         panel = pd.read_parquet('data/staging/panel.parquet')
         
         etf_symbols = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL']
-        results = {}
+        results: Dict[str, Dict[str, float]] = {}
         
         for symbol in etf_symbols:
             col = f"{symbol}_adj"
@@ -244,7 +244,7 @@ class DataValidator:
             'assets_checked': results
         }
     
-    def _save_report(self, results: Dict) -> None:
+    def _save_report(self, results: Dict[str, Any]) -> None:
         """Save validation report to staging directory."""
         output_path = Path('data/staging/_validation_report.json')
         
@@ -276,7 +276,7 @@ class DataValidator:
                 print(f"  - {warn}")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='Validate Index-Coin data pipeline')
     parser.add_argument('--strict', action='store_true',
                        help='Fail on warnings (for CI environment)')
