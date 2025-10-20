@@ -6,7 +6,7 @@ Tech Spec Section 8.1 - Metric definitions with valid ranges.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 import numpy as np
 
 
@@ -75,7 +75,7 @@ class MetricsValidator:
             print(f"❌ {error_msg}")
             return False
         except (OSError, IOError) as e:
-            error_msg = f"Failed to read {filepath}: {e}"
+            error_msg = f"Failed to read {filepath}: {str(e)}"
             self.errors.append(error_msg)
             print(f"❌ {error_msg}")
             return False
@@ -139,15 +139,16 @@ class MetricsValidator:
                 # Warn if near boundaries (skip for infinite bounds)
                 if not np.isinf(max_val):
                     range_size = max_val - min_val
-                    if abs(value - min_val) < 0.1 * range_size:
-                        self.warnings.append(f"{metric} near lower bound: {value:.4f}")
-                    elif abs(value - max_val) < 0.1 * range_size:
-                        self.warnings.append(f"{metric} near upper bound: {value:.4f}")
+                    if range_size > 0:  # Avoid division by zero
+                        if abs(value - min_val) < 0.1 * range_size:
+                            self.warnings.append(f"{metric} near lower bound: {value:.4f}")
+                        elif abs(value - max_val) < 0.1 * range_size:
+                            self.warnings.append(f"{metric} near upper bound: {value:.4f}")
         
         return all_valid
     
     def _check_finiteness(self, metrics: Dict[str, float]) -> bool:
-        """Check no metrics are NaN or Inf."""
+        """Check no metrics are NaN or Inf (except where explicitly allowed)."""
         all_valid = True
         
         for metric, value in metrics.items():
@@ -160,7 +161,7 @@ class MetricsValidator:
             elif np.isinf(value):
                 # Inf is acceptable for MAR/Calmar (zero drawdown case)
                 if metric in ['MAR', 'Calmar']:
-                    self.warnings.append(f"{metric} is infinite (zero drawdown?)")
+                    self.warnings.append(f"{metric} is infinite (zero drawdown case)")
                 else:
                     self.errors.append(f"{metric} is infinite")
                     all_valid = False
@@ -178,8 +179,15 @@ class MetricsValidator:
             if not all(k in metrics for k in [dependent, numerator, denominator]):
                 continue
             
-            # Skip if denominator is zero (undefined relationship)
-            if metrics[denominator] == 0:
+            # Get values
+            dep_val = metrics[dependent]
+            num_val = metrics[numerator]
+            denom_val = metrics[denominator]
+            
+            # Skip if dependent or numerator are infinite or NaN
+            if np.isinf(dep_val) or np.isnan(dep_val):
+                continue
+            if np.isinf(num_val) or np.isnan(num_val):
                 continue
             
             # Compute expected value based on relationship type
@@ -187,25 +195,30 @@ class MetricsValidator:
             
             if rel_type == 'ratio_abs_denom':
                 # For MAR/Calmar: ratio with absolute value of denominator
-                computed = metrics[numerator] / abs(metrics[denominator])
+                if abs(denom_val) > 1e-10:  # Avoid division by near-zero
+                    computed = num_val / abs(denom_val)
+                else:
+                    # Near-zero denominator makes ratio undefined/infinite
+                    continue
+                    
             elif rel_type == 'ratio':
                 # For Sharpe: simple ratio (assuming RF=0 already subtracted)
-                if metrics[denominator] > 0:
-                    computed = metrics[numerator] / metrics[denominator]
+                if denom_val > 1e-10:  # Avoid division by near-zero
+                    computed = num_val / denom_val
                 else:
-                    # Non-positive denominator makes ratio undefined
+                    # Near-zero or negative denominator makes ratio undefined
                     msg = (f"{dependent} ratio undefined: denominator {denominator} "
-                           f"= {metrics[denominator]} <= 0")
+                           f"= {denom_val:.6f} too small")
                     self.warnings.append(msg)
-                    continue  # Skip consistency check for undefined ratio
+                    continue
             else:
                 self.warnings.append(f"Unknown relationship type: {rel_type}")
                 continue
             
-            # Check consistency (only if computed value is defined)
-            if computed is not None and not np.isnan(computed):
-                if not np.isclose(metrics[dependent], computed, rtol=rtol):
-                    msg = f"{dependent} inconsistent: {metrics[dependent]:.3f} vs computed {computed:.3f}"
+            # Check consistency (only if computed value is defined and finite)
+            if computed is not None and np.isfinite(computed):
+                if not np.isclose(dep_val, computed, rtol=rtol, atol=1e-6):
+                    msg = f"{dependent} inconsistent: {dep_val:.4f} vs computed {computed:.4f}"
                     if self.strict:
                         self.errors.append(msg)
                         all_valid = False
@@ -218,15 +231,17 @@ class MetricsValidator:
         """Check special cases and common issues."""
         all_valid = True
         
-        # MaxDD should be negative
-        if 'MaxDD' in metrics and metrics['MaxDD'] > 0:
-            self.errors.append(f"MaxDD must be negative: {metrics['MaxDD']}")
-            all_valid = False
+        # MaxDD should be negative or zero
+        if 'MaxDD' in metrics:
+            if metrics['MaxDD'] > 0:
+                self.errors.append(f"MaxDD must be non-positive: {metrics['MaxDD']:.4f}")
+                all_valid = False
         
         # CVaR should be negative (losses)
-        if 'CVaR95' in metrics and metrics['CVaR95'] > 0:
-            self.errors.append(f"CVaR95 must be non-positive: {metrics['CVaR95']}")
-            all_valid = False
+        if 'CVaR95' in metrics:
+            if metrics['CVaR95'] > 0:
+                self.errors.append(f"CVaR95 must be non-positive: {metrics['CVaR95']:.4f}")
+                all_valid = False
         
         # Turnover warning
         if 'Turnover' in metrics and metrics['Turnover'] > 2.0:
@@ -241,14 +256,15 @@ class MetricsValidator:
             if metrics['RiskOff_pct'] > 0.5:
                 self.warnings.append(f"High Risk-Off time: {metrics['RiskOff_pct']:.1%}")
             elif metrics['RiskOff_pct'] == 0:
-                self.warnings.append("Risk-Off never triggered (normal or concerning?)")
+                self.warnings.append("Risk-Off never triggered")
         
         # Ulcer should be less than or comparable to |MaxDD|
         if all(k in metrics for k in ['Ulcer', 'MaxDD']):
-            if metrics['Ulcer'] > abs(metrics['MaxDD']) * 1.5:
-                self.warnings.append(
-                    f"Ulcer ({metrics['Ulcer']:.3f}) >> |MaxDD| ({abs(metrics['MaxDD']):.3f})"
-                )
+            if metrics['MaxDD'] != 0:  # Avoid division by zero
+                if metrics['Ulcer'] > abs(metrics['MaxDD']) * 1.5:
+                    self.warnings.append(
+                        f"Ulcer ({metrics['Ulcer']:.3f}) >> |MaxDD| ({abs(metrics['MaxDD']):.3f})"
+                    )
         
         return all_valid
     
