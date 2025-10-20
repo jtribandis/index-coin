@@ -55,26 +55,52 @@ class DataValidator:
             self.errors.append("Missing _ingest_manifest.json")
             return {'valid': False}
         
-        with open(manifest_path) as f:
-            manifest = json.load(f)
+        # Load manifest with exception handling
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+        except FileNotFoundError:
+            self.errors.append("Manifest file not found during read")
+            return {'valid': False}
+        except PermissionError:
+            self.errors.append("Permission denied reading manifest file")
+            return {'valid': False}
+        except json.JSONDecodeError as e:
+            self.errors.append(f"Invalid JSON in manifest file: {e}")
+            return {'valid': False}
         
         mismatches = []
+        file_errors = []
+        
         for symbol in self.SYMBOLS:
             file_path = Path(f'data/raw/{symbol}.csv')
             if not file_path.exists():
-                self.errors.append(f"Missing raw data file: {symbol}.csv")
+                error_msg = f"Missing raw data file: {symbol}.csv"
+                self.errors.append(error_msg)
+                file_errors.append(error_msg)
                 continue
-                
-            with open(file_path, 'rb') as f:
-                actual_hash = hashlib.sha256(f.read()).hexdigest()
+            
+            # Read file with exception handling
+            try:
+                with open(file_path, 'rb') as f:
+                    actual_hash = hashlib.sha256(f.read()).hexdigest()
+            except OSError as e:
+                error_msg = f"Cannot read {symbol}.csv: {e}"
+                self.errors.append(error_msg)
+                file_errors.append(error_msg)
+                continue
             
             expected = manifest.get(symbol, {}).get('sha256')
             if expected and actual_hash != expected:
-                mismatches.append(f"{symbol}: hash mismatch")
+                mismatch_msg = f"{symbol}: hash mismatch"
+                mismatches.append(mismatch_msg)
         
         if mismatches:
             self.errors.extend(mismatches)
-            return {'valid': False, 'mismatches': mismatches}
+            return {'valid': False, 'mismatches': mismatches, 'file_errors': file_errors}
+        
+        if file_errors:
+            return {'valid': False, 'file_errors': file_errors}
         
         return {'valid': True, 'symbols_checked': len(self.SYMBOLS)}
     
