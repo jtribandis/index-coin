@@ -100,7 +100,10 @@ class DeterminismChecker:
             # Clean previous runs
             self._clean_dirs()
             
-            # Create mock outputs twice
+            # Create directories and mock outputs
+            self.run1_dir.mkdir(parents=True, exist_ok=True)
+            self.run2_dir.mkdir(parents=True, exist_ok=True)
+            
             self._create_mock_outputs(self.run1_dir)
             self._create_mock_outputs(self.run2_dir)
             
@@ -440,6 +443,9 @@ class DeterminismChecker:
         np.random.seed(self.seed)  # Critical: use consistent seed
         
         self._log(f"Creating mock outputs in {output_dir}", "DEBUG")
+        
+        # Ensure output directory exists
+        output_dir.mkdir(parents=True, exist_ok=True)
         
         # Mock predicted edge
         symbols = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL', 'BTC-USD']
