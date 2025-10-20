@@ -6,7 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 import pandas as pd
 import numpy as np
 
@@ -28,27 +28,13 @@ class DataValidator:
         """Run complete validation suite."""
         print("🔍 Starting data validation pipeline...")
         
-        # Load panel once with exception handling
-        panel = None
-        panel_path = Path('data/staging/panel.parquet')
-        
-        if panel_path.exists():
-            try:
-                panel = pd.read_parquet(panel_path)
-            except Exception as e:
-                self.errors.append(f"Failed to load panel.parquet: {e}")
-                return {
-                    'status': 'FAIL',
-                    'errors': self.errors
-                }
-        
         results = {
             'manifest_check': self.validate_manifest(),
-            'panel_integrity': self.validate_panel(panel),
-            'gap_analysis': self.validate_gaps(panel),
-            'return_sanity': self.validate_returns(panel),
-            'btc_alignment': self.validate_btc_alignment(panel),
-            'dividend_verification': self.validate_dividends(panel),
+            'panel_integrity': self.validate_panel(),
+            'gap_analysis': self.validate_gaps(),
+            'return_sanity': self.validate_returns(),
+            'btc_alignment': self.validate_btc_alignment(),
+            'dividend_verification': self.validate_dividends(),
             'status': 'PASS'
         }
         
@@ -69,12 +55,8 @@ class DataValidator:
             self.errors.append("Missing _ingest_manifest.json")
             return {'valid': False}
         
-        try:
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-        except Exception as e:
-            self.errors.append(f"Failed to read manifest: {e}")
-            return {'valid': False}
+        with open(manifest_path) as f:
+            manifest = json.load(f)
         
         mismatches = []
         for symbol in self.SYMBOLS:
@@ -82,13 +64,9 @@ class DataValidator:
             if not file_path.exists():
                 self.errors.append(f"Missing raw data file: {symbol}.csv")
                 continue
-            
-            try:
-                with open(file_path, 'rb') as f:
-                    actual_hash = hashlib.sha256(f.read()).hexdigest()
-            except Exception as e:
-                self.errors.append(f"Failed to read {symbol}.csv: {e}")
-                continue
+                
+            with open(file_path, 'rb') as f:
+                actual_hash = hashlib.sha256(f.read()).hexdigest()
             
             expected = manifest.get(symbol, {}).get('sha256')
             if expected and actual_hash != expected:
@@ -100,20 +78,19 @@ class DataValidator:
         
         return {'valid': True, 'symbols_checked': len(self.SYMBOLS)}
     
-    def validate_panel(self, panel: Optional[pd.DataFrame] = None) -> Dict:
+    def validate_panel(self) -> Dict:
         """Validate staging panel structure (Tech Spec 2.3)."""
-        if panel is None:
-            panel_path = Path('data/staging/panel.parquet')
-            
-            if not panel_path.exists():
-                self.errors.append("Missing panel.parquet")
-                return {'valid': False}
-            
-            try:
-                panel = pd.read_parquet(panel_path)
-            except Exception as e:
-                self.errors.append(f"Failed reading panel.parquet: {e}")
-                return {'valid': False}
+        panel_path = Path('data/staging/panel.parquet')
+        
+        if not panel_path.exists():
+            self.errors.append("Missing panel.parquet")
+            return {'valid': False}
+        
+        try:
+            panel = pd.read_parquet(panel_path)
+        except Exception as e:
+            self.errors.append(f"Failed reading panel.parquet: {e}")
+            return {'valid': False}
         
         # Check for expected columns
         expected_cols = [f"{sym}_adj" for sym in self.SYMBOLS]
@@ -135,15 +112,9 @@ class DataValidator:
             'columns': len(panel.columns)
         }
     
-    def validate_gaps(self, panel: Optional[pd.DataFrame] = None) -> Dict:
+    def validate_gaps(self) -> Dict:
         """Check for excessive data gaps (Tech Spec 2.3)."""
-        if panel is None:
-            try:
-                panel = pd.read_parquet('data/staging/panel.parquet')
-            except Exception as e:
-                self.errors.append(f"Failed to read panel.parquet: {e}")
-                return {'valid': False}
-        
+        panel = pd.read_parquet('data/staging/panel.parquet')
         gap_violations = []
         
         for symbol in self.SYMBOLS:
@@ -178,15 +149,9 @@ class DataValidator:
             'violations': gap_violations
         }
     
-    def validate_returns(self, panel: Optional[pd.DataFrame] = None) -> Dict:
+    def validate_returns(self) -> Dict:
         """Detect extreme returns indicating data errors (Tech Spec 13.2)."""
-        if panel is None:
-            try:
-                panel = pd.read_parquet('data/staging/panel.parquet')
-            except Exception as e:
-                self.errors.append(f"Failed to read panel.parquet: {e}")
-                return {'valid': False}
-        
+        panel = pd.read_parquet('data/staging/panel.parquet')
         returns = panel.pct_change()
         
         extreme_events = []
@@ -212,15 +177,9 @@ class DataValidator:
             'extreme_events': extreme_events
         }
     
-    def validate_btc_alignment(self, panel: Optional[pd.DataFrame] = None) -> Dict:
+    def validate_btc_alignment(self) -> Dict:
         """Verify BTC 7-day data aligned to business calendar (Tech Spec 2.3)."""
-        if panel is None:
-            try:
-                panel = pd.read_parquet('data/staging/panel.parquet')
-            except Exception as e:
-                self.errors.append(f"Failed to read panel.parquet: {e}")
-                return {'valid': False}
-        
+        panel = pd.read_parquet('data/staging/panel.parquet')
         btc_col = 'BTC-USD_adj'
         
         if btc_col not in panel.columns:
@@ -242,17 +201,12 @@ class DataValidator:
             'min_weekly_obs': int(btc_weekly.min())
         }
     
-    def validate_dividends(self, panel: Optional[pd.DataFrame] = None) -> Dict:
+    def validate_dividends(self) -> Dict:
         """Verify dividend reinvestment calculation (Tech Spec 2.2)."""
-        if panel is None:
-            try:
-                panel = pd.read_parquet('data/staging/panel.parquet')
-            except Exception as e:
-                self.errors.append(f"Failed to read panel.parquet: {e}")
-                return {'valid': False}
-        
         # This is a simplified check - in production you'd compute explicit
         # reinvestment and compare to Adjusted Close
+        panel = pd.read_parquet('data/staging/panel.parquet')
+        
         etf_symbols = ['GLD', 'QQQ', 'SPY', 'SMH', 'IYR', 'ANGL']
         results = {}
         
