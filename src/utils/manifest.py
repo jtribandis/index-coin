@@ -86,6 +86,7 @@ class ManifestGenerator:
             "valid": True,
             "mismatches": [],
             "missing_files": [],
+            "io_errors": [],
             "valid_files": []
         }
         
@@ -97,9 +98,26 @@ class ManifestGenerator:
                 results["valid"] = False
                 continue
             
-            # Compute current file hash
-            with open(file_path, 'rb') as f:
-                current_hash = hashlib.sha256(f.read()).hexdigest()
+            # Compute current file hash with exception handling
+            try:
+                with open(file_path, 'rb') as f:
+                    current_hash = hashlib.sha256(f.read()).hexdigest()
+            except (OSError, PermissionError) as e:
+                results["io_errors"].append({
+                    "symbol": symbol,
+                    "error": str(e)
+                })
+                results["valid"] = False
+                print(f"Warning: Failed to read file for symbol {symbol}: {e}")
+                continue
+            except Exception as e:
+                results["io_errors"].append({
+                    "symbol": symbol,
+                    "error": str(e)
+                })
+                results["valid"] = False
+                print(f"Warning: Unexpected error reading file for symbol {symbol}: {e}")
+                continue
             
             # Get expected hash from manifest
             expected_hash = manifest.get("symbols", {}).get(symbol, {}).get("sha256")
