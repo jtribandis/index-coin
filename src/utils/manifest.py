@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -52,24 +51,22 @@ class ManifestGenerator:
     
     def save_manifest(self, manifest: Dict) -> None:
         """Save manifest to JSON file."""
-        # Ensure parent directory exists
-        os.makedirs(os.path.dirname(self.manifest_path), exist_ok=True)
-        
-        try:
-            with open(self.manifest_path, 'w') as f:
-                json.dump(manifest, f, indent=2)
-        except (PermissionError, OSError, IOError) as e:
-            error_msg = f"Failed to write manifest to {self.manifest_path}: {e}"
-            print(f"ERROR: {error_msg}")
-            raise RuntimeError(error_msg) from e
+        with open(self.manifest_path, 'w') as f:
+            json.dump(manifest, f, indent=2)
     
     def load_manifest(self) -> Optional[Dict]:
         """Load existing manifest from JSON file."""
         if not self.manifest_path.exists():
             return None
         
-        with open(self.manifest_path, 'r') as f:
-            return json.load(f)
+        try:
+            with open(self.manifest_path, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            # Log the error if you have a logger configured
+            # logger.error(f"Failed to parse manifest file: {e}")
+            print(f"Warning: Failed to parse manifest file {self.manifest_path}: {e}")
+            return None
     
     def validate_manifest(self, symbols: List[str]) -> Dict:
         """
