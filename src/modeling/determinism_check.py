@@ -21,11 +21,18 @@ class DeterminismChecker:
     """Verify system produces identical outputs with same seed."""
 
     def __init__(
-        self, seed: int = 42, date: str = "2024-01-01", verbose: bool = False
+        self,
+        seed: int = 42,
+        date: str = "2024-01-01",
+        verbose: bool = False,
+        portfolio_checks_mandatory: bool = False,
+        feature_checks_mandatory: bool = False,
     ) -> None:
         self.seed = seed
         self.date = date
         self.verbose = verbose
+        self.portfolio_checks_mandatory = portfolio_checks_mandatory
+        self.feature_checks_mandatory = feature_checks_mandatory
         base_temp = Path(tempfile.gettempdir())
         self.run1_dir = base_temp / "determinism_run1"
         self.run2_dir = base_temp / "determinism_run2"
@@ -48,6 +55,8 @@ class DeterminismChecker:
         print(f"Seed: {self.seed}, Test Date: {self.date}")
         if self.verbose:
             print("Verbose mode: ENABLED")
+            print(f"Portfolio checks mandatory: {self.portfolio_checks_mandatory}")
+            print(f"Feature checks mandatory: {self.feature_checks_mandatory}")
             print(f"Run 1 directory: {self.run1_dir}")
             print(f"Run 2 directory: {self.run2_dir}")
         print()
@@ -65,18 +74,39 @@ class DeterminismChecker:
             print(f"Checking: {name}")
             try:
                 passed, details = check_fn()
-                status = "✅ PASS" if passed else "❌ FAIL"
+
+                # Determine if this is an optional skip (non-fatal missing files)
+                is_optional_skip = (
+                    not passed
+                    and "(optional check - non-fatal)" in details.lower()
+                )
+
+                if passed:
+                    status = "✅ PASS"
+                elif is_optional_skip:
+                    status = "⚠️ SKIP (optional)"
+                else:
+                    status = "❌ FAIL"
+
                 print(f"  {status}")
                 if details:
                     print(f"  Details: {details}")
                 print()
 
-                results[name] = {"passed": passed, "details": details}
-                all_passed = all_passed and passed
+                results[name] = {
+                    "passed": passed,
+                    "details": details,
+                    "optional_skip": is_optional_skip,
+                }
+
+                # Only count actual failures (not optional skips) toward overall result
+                if not passed and not is_optional_skip:
+                    all_passed = False
+
             except Exception as e:
                 print(f"  ❌ ERROR: {str(e)}\n")
                 self.errors.append(f"{name}: {str(e)}")
-                results[name] = {"passed": False, "error": str(e)}
+                results[name] = {"passed": False, "error": str(e), "optional_skip": False}
                 all_passed = False
 
         # Save results
@@ -203,9 +233,18 @@ class DeterminismChecker:
 
         self._log(f"Looking for NAV files at {nav1_path} and {nav2_path}", "DEBUG")
 
+        # FIXED: No longer silently returns True for missing files
         if not nav1_path.exists() or not nav2_path.exists():
-            self._log("NAV files not found - skipping portfolio check", "INFO")
-            return True, "NAV files not generated (may be optional)"
+            if self.portfolio_checks_mandatory:
+                self._log(
+                    "NAV files not found - this is a MANDATORY check failure", "ERROR"
+                )
+                return False, "NAV files missing — determinism check failed"
+            else:
+                self._log(
+                    "NAV files not found - skipping optional portfolio check", "INFO"
+                )
+                return False, "NAV files not generated (optional check - non-fatal)"
 
         nav1 = pd.read_csv(nav1_path)
         nav2 = pd.read_csv(nav2_path)
@@ -250,9 +289,19 @@ class DeterminismChecker:
             "DEBUG",
         )
 
+        # FIXED: No longer silently returns True for missing files
         if not features1_path.exists() or not features2_path.exists():
-            self._log("Feature files not found - skipping feature check", "INFO")
-            return True, "Feature files not generated (may be optional)"
+            if self.feature_checks_mandatory:
+                self._log(
+                    "Feature files not found - this is a MANDATORY check failure",
+                    "ERROR",
+                )
+                return False, "Feature files missing — determinism check failed"
+            else:
+                self._log(
+                    "Feature files not found - skipping optional feature check", "INFO"
+                )
+                return False, "Feature files not generated (optional check - non-fatal)"
 
         features1 = pd.read_csv(features1_path)
         features2 = pd.read_csv(features2_path)
@@ -519,9 +568,14 @@ class DeterminismChecker:
             "seed": self.seed,
             "test_date": self.date,
             "verbose": self.verbose,
+            "portfolio_checks_mandatory": self.portfolio_checks_mandatory,
+            "feature_checks_mandatory": self.feature_checks_mandatory,
             "results": results,
             "errors": self.errors,
-            "overall_pass": all(r.get("passed", False) for r in results.values()),
+            "overall_pass": all(
+                r.get("passed", False) or r.get("optional_skip", False)
+                for r in results.values()
+            ),
         }
 
         with open(output_path, "w") as f:
@@ -546,10 +600,26 @@ def main() -> None:
         action="store_true",
         help="Print detailed debug output and intermediate results",
     )
+    parser.add_argument(
+        "--portfolio-checks-mandatory",
+        action="store_true",
+        help="Treat missing portfolio NAV files as a failure (default: optional)",
+    )
+    parser.add_argument(
+        "--feature-checks-mandatory",
+        action="store_true",
+        help="Treat missing feature files as a failure (default: optional)",
+    )
 
     args = parser.parse_args()
 
-    checker = DeterminismChecker(seed=args.seed, date=args.date, verbose=args.verbose)
+    checker = DeterminismChecker(
+        seed=args.seed,
+        date=args.date,
+        verbose=args.verbose,
+        portfolio_checks_mandatory=args.portfolio_checks_mandatory,
+        feature_checks_mandatory=args.feature_checks_mandatory,
+    )
     passed = checker.check_all()
 
     if passed:
