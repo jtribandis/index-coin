@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
@@ -25,7 +25,7 @@ class DeterminismChecker:
         base_temp = Path(tempfile.gettempdir())
         self.run1_dir = base_temp / "determinism_run1"
         self.run2_dir = base_temp / "determinism_run2"
-        self.errors: list[str] = []
+        self.errors = []
         
     def check_all(self) -> bool:
         """Run complete determinism verification suite."""
@@ -39,7 +39,7 @@ class DeterminismChecker:
         ]
         
         all_passed = True
-        results: Dict[str, Any] = {}
+        results = {}
         
         for name, check_fn in checks:
             print(f"Checking: {name}")
@@ -347,7 +347,7 @@ class DeterminismChecker:
         }
         pd.DataFrame(nav_data).to_csv(output_dir / "portfolio_nav.csv", index=False)
     
-    def _save_results(self, results: Dict[str, Any]) -> None:
+    def _save_results(self, results: Dict) -> None:
         """Save determinism check results to JSON."""
         output_path = Path("artifacts/reports/determinism_results.json")
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -367,7 +367,7 @@ class DeterminismChecker:
         print(f"📄 Results saved to {output_path}")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description='Verify system determinism for quantitative trading'
     )
