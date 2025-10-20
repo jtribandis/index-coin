@@ -56,8 +56,22 @@ class DataValidator:
             self.errors.append("Missing _ingest_manifest.json")
             return {"valid": False}
 
-        with open(manifest_path) as f:
-            manifest = json.load(f)
+        # Load and parse manifest with exception handling
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+        except FileNotFoundError:
+            self.errors.append(f"Manifest file not found: {manifest_path}")
+            return {"valid": False}
+        except PermissionError as e:
+            self.errors.append(f"Permission denied reading manifest {manifest_path}: {e}")
+            return {"valid": False}
+        except json.JSONDecodeError as e:
+            self.errors.append(f"Invalid JSON in manifest {manifest_path}: {e}")
+            return {"valid": False}
+        except Exception as e:
+            self.errors.append(f"Failed to read manifest {manifest_path}: {e}")
+            return {"valid": False}
 
         mismatches: List[str] = []
         for symbol in self.SYMBOLS:
@@ -66,8 +80,25 @@ class DataValidator:
                 self.errors.append(f"Missing raw data file: {symbol}.csv")
                 continue
 
-            with open(file_path, "rb") as f:
-                actual_hash = hashlib.sha256(f.read()).hexdigest()
+            # Read file and compute hash with exception handling
+            try:
+                with open(file_path, "rb") as f:
+                    actual_hash = hashlib.sha256(f.read()).hexdigest()
+            except (OSError, IOError) as e:
+                error_msg = f"Failed to read {file_path}: {e}"
+                self.errors.append(error_msg)
+                mismatches.append(f"{symbol}: read error")
+                continue
+            except PermissionError as e:
+                error_msg = f"Permission denied reading {file_path}: {e}"
+                self.errors.append(error_msg)
+                mismatches.append(f"{symbol}: permission error")
+                continue
+            except Exception as e:
+                error_msg = f"Unexpected error reading {file_path}: {e}"
+                self.errors.append(error_msg)
+                mismatches.append(f"{symbol}: unexpected error")
+                continue
 
             expected = manifest.get("symbols", {}).get(symbol, {}).get("sha256")
             if expected and actual_hash != expected:
