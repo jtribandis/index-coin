@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
@@ -24,7 +24,7 @@ class DeterminismChecker:
         base_temp = Path(tempfile.gettempdir())
         self.run1_dir = base_temp / "determinism_run1"
         self.run2_dir = base_temp / "determinism_run2"
-        self.errors = []
+        self.errors: List[str] = []
         
     def check_all(self) -> bool:
         """Run complete determinism verification suite."""
