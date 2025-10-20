@@ -67,9 +67,7 @@ tests/golden/__init__.py
 tests/__init__.py
 
 ## Data Files
-total 0
-drwxr-xr-x   5 jasontribandis  staff  160 Oct 17 16:21 .
-drwxr-xr-x  26 jasontribandis  staff  832 Oct 19 00:24 ..
-drwxr-xr-x   2 jasontribandis  staff   64 Oct 17 16:21 curated
-drwxr-xr-x   2 jasontribandis  staff   64 Oct 17 16:21 raw
-drwxr-xr-x   2 jasontribandis  staff   64 Oct 17 16:21 staging
+The data directory contains three subdirectories:
+- `curated/` - Processed and validated data ready for analysis
+- `raw/` - Original data files from external sources  
+- `staging/` - Intermediate data files during processing pipeline

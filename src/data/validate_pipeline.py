@@ -217,7 +217,15 @@ class DataValidator:
                 continue
             
             # Annual returns should be within reasonable bounds
-            annual_return = (prices.iloc[-1] / prices.iloc[0]) ** (252 / len(prices)) - 1
+            # Compute actual time span for proper annualization
+            first_date = prices.index[0]
+            last_date = prices.index[-1]
+            years = (last_date - first_date).days / 365.25
+            
+            if years <= 0:
+                annual_return = np.nan
+            else:
+                annual_return = (prices.iloc[-1] / prices.iloc[0]) ** (1 / years) - 1
             
             if not -0.50 < annual_return < 1.00:  # -50% to +100% annual
                 self.warnings.append(f"{symbol}: unusual annual return {annual_return:.2%}")

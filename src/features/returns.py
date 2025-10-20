@@ -34,13 +34,16 @@ def compute_daily_returns(prices: pd.Series) -> pd.Series:
 
 def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
     """
-    Compute cumulative value series from periodic returns, initializing the starting value to 1.0.
+    Compute cumulative value series from periodic returns.
 
     Parameters:
         returns (pd.Series): Series of periodic returns (e.g., daily returns). NaN values are allowed and indicate missing returns.
 
     Returns:
-        pd.Series: Cumulative value series with the same index and length as `returns`. The first element is 1.0 and subsequent elements represent the compounded value: V_t = V_{t-1} * (1 + r_{t-1}). When a return is NaN, the cumulative value is carried forward unchanged.
+        pd.Series: Cumulative value series with the same index and length as `returns`. 
+        - If the first return is not NaN, the first element is 1 + first_return
+        - If the first return is NaN, the first element is 1.0 and subsequent elements represent the compounded value: V_t = V_{t-1} * (1 + r_{t-1}). 
+        When a return is NaN, the cumulative value is carried forward unchanged.
 
     Raises:
         TypeError: If `returns` is not a pandas Series.
@@ -53,7 +56,15 @@ def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
     if not pd.api.types.is_numeric_dtype(returns):
         raise ValueError("returns must contain numeric values")
 
-    return (1 + returns.fillna(0)).cumprod()
+    # Handle the case where first return is NaN (typical from pct_change)
+    if pd.isna(returns.iloc[0]):
+        # First element is 1.0, then apply returns from second element
+        result = (1 + returns.fillna(0)).cumprod()
+        result.iloc[0] = 1.0
+        return result
+    else:
+        # First element is 1 + first_return, then compound from there
+        return (1 + returns.fillna(0)).cumprod()
 
 
 def compute_total_return(cumulative_returns: pd.Series) -> float:
