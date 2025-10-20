@@ -14,11 +14,13 @@ class MetricsValidator:
     """Validate financial metrics are within acceptable bounds."""
     
     # Define valid ranges for each metric
+    # Note: MAR and Calmar can be infinite when MaxDD is near zero,
+    # so we allow arbitrarily large values (up to infinity)
     BOUNDS = {
         'Sharpe': (-5.0, 10.0),
         'Sortino': (-5.0, 15.0),
-        'MAR': (0.0, 20.0),
-        'Calmar': (0.0, 20.0),
+        'MAR': (0.0, float('inf')),  # Allow infinity for zero drawdown cases
+        'Calmar': (0.0, float('inf')),  # Allow infinity for zero drawdown cases
         'MaxDD': (-1.0, 0.0),
         'CVaR95': (-1.0, 0.0),
         'Ulcer': (0.0, 1.0),
@@ -32,15 +34,22 @@ class MetricsValidator:
     }
     
     # Relationships between metrics
+    # Format: (dependent_metric, numerator_metric, denominator_metric, relationship_type, tolerance)
     RELATIONSHIPS = [
-        ('MAR', 'MaxDD', 'inverse'),  # MAR = CAGR / |MaxDD|
-        ('Sharpe', 'Vol', 'inverse'),  # Sharpe = Return / Vol
+        ('MAR', 'CAGR', 'MaxDD', 'ratio_abs_denom', 0.01),      # MAR = CAGR / |MaxDD|
+        ('Calmar', 'CAGR', 'MaxDD', 'ratio_abs_denom', 0.01),   # Calmar = CAGR / |MaxDD|
+        ('Sharpe', 'CAGR', 'Vol', 'ratio', 0.05),               # Sharpe = CAGR / Vol (RF=0)
     ]
     
     def __init__(self, strict: bool = False):
         self.strict = strict
         self.errors: List[str] = []
         self.warnings: List[str] = []
+    
+    def _reset_state(self):
+        """Clear accumulated errors and warnings for fresh validation."""
+        self.errors = []
+        self.warnings = []
     
     def validate_metrics_file(self, filepath: str) -> bool:
         """
@@ -57,8 +66,19 @@ class MetricsValidator:
             self.errors.append(f"Metrics file not found: {filepath}")
             return False
         
-        with open(path) as f:
-            metrics = json.load(f)
+        try:
+            with open(path) as f:
+                metrics = json.load(f)
+        except json.JSONDecodeError as e:
+            error_msg = f"Invalid JSON in {filepath}: {e.msg} at line {e.lineno}, column {e.colno}"
+            self.errors.append(error_msg)
+            print(f"❌ {error_msg}")
+            return False
+        except (OSError, IOError) as e:
+            error_msg = f"Failed to read {filepath}: {e}"
+            self.errors.append(error_msg)
+            print(f"❌ {error_msg}")
+            return False
         
         return self.validate_metrics(metrics)
     
@@ -72,6 +92,9 @@ class MetricsValidator:
         Returns:
             True if all metrics valid, False otherwise
         """
+        # Reset state to avoid accumulating errors across calls
+        self._reset_state()
+        
         print("🔍 Validating financial metrics...")
         
         # Check bounds
@@ -107,17 +130,19 @@ class MetricsValidator:
             
             min_val, max_val = self.BOUNDS[metric]
             
+            # Handle infinity bounds properly
             if not (min_val <= value <= max_val):
                 msg = f"{metric} out of bounds: {value:.4f} not in [{min_val}, {max_val}]"
                 self.errors.append(msg)
                 all_valid = False
             else:
-                # Warn if near boundaries
-                range_size = max_val - min_val
-                if abs(value - min_val) < 0.1 * range_size:
-                    self.warnings.append(f"{metric} near lower bound: {value:.4f}")
-                elif abs(value - max_val) < 0.1 * range_size:
-                    self.warnings.append(f"{metric} near upper bound: {value:.4f}")
+                # Warn if near boundaries (skip for infinite bounds)
+                if not np.isinf(max_val):
+                    range_size = max_val - min_val
+                    if abs(value - min_val) < 0.1 * range_size:
+                        self.warnings.append(f"{metric} near lower bound: {value:.4f}")
+                    elif abs(value - max_val) < 0.1 * range_size:
+                        self.warnings.append(f"{metric} near upper bound: {value:.4f}")
         
         return all_valid
     
@@ -133,7 +158,7 @@ class MetricsValidator:
                 self.errors.append(f"{metric} is NaN")
                 all_valid = False
             elif np.isinf(value):
-                # Inf might be acceptable for MAR in some cases
+                # Inf is acceptable for MAR/Calmar (zero drawdown case)
                 if metric in ['MAR', 'Calmar']:
                     self.warnings.append(f"{metric} is infinite (zero drawdown?)")
                 else:
@@ -143,27 +168,37 @@ class MetricsValidator:
         return all_valid
     
     def _check_relationships(self, metrics: Dict[str, float]) -> bool:
-        """Check logical relationships between metrics."""
+        """Check logical relationships between metrics using RELATIONSHIPS definitions."""
         all_valid = True
         
-        # MAR = CAGR / |MaxDD|
-        if all(k in metrics for k in ['MAR', 'CAGR', 'MaxDD']):
-            if metrics['MaxDD'] != 0:
-                computed_mar = metrics['CAGR'] / abs(metrics['MaxDD'])
-                if not np.isclose(metrics['MAR'], computed_mar, rtol=0.01):
-                    msg = f"MAR inconsistent: {metrics['MAR']:.3f} vs computed {computed_mar:.3f}"
-                    if self.strict:
-                        self.errors.append(msg)
-                        all_valid = False
-                    else:
-                        self.warnings.append(msg)
-        
-        # Sharpe = (CAGR - RF) / Vol
-        if all(k in metrics for k in ['Sharpe', 'CAGR', 'Vol']):
-            rf = 0.0  # Assuming 0 risk-free rate
-            computed_sharpe = (metrics['CAGR'] - rf) / metrics['Vol'] if metrics['Vol'] > 0 else 0
-            if not np.isclose(metrics['Sharpe'], computed_sharpe, rtol=0.05):
-                msg = f"Sharpe inconsistent: {metrics['Sharpe']:.3f} vs computed {computed_sharpe:.3f}"
+        for relationship in self.RELATIONSHIPS:
+            dependent, numerator, denominator, rel_type, rtol = relationship
+            
+            # Skip if any required metric is missing
+            if not all(k in metrics for k in [dependent, numerator, denominator]):
+                continue
+            
+            # Skip if denominator is zero (undefined relationship)
+            if metrics[denominator] == 0:
+                continue
+            
+            # Compute expected value based on relationship type
+            if rel_type == 'ratio_abs_denom':
+                # For MAR/Calmar: ratio with absolute value of denominator
+                computed = metrics[numerator] / abs(metrics[denominator])
+            elif rel_type == 'ratio':
+                # For Sharpe: simple ratio (assuming RF=0 already subtracted)
+                if metrics[denominator] > 0:
+                    computed = metrics[numerator] / metrics[denominator]
+                else:
+                    computed = 0  # Avoid division by zero
+            else:
+                self.warnings.append(f"Unknown relationship type: {rel_type}")
+                continue
+            
+            # Check consistency
+            if not np.isclose(metrics[dependent], computed, rtol=rtol):
+                msg = f"{dependent} inconsistent: {metrics[dependent]:.3f} vs computed {computed:.3f}"
                 if self.strict:
                     self.errors.append(msg)
                     all_valid = False
