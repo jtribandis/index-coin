@@ -297,9 +297,12 @@ class DeterminismChecker:
             # Weights file optional - rely on prediction comparison
             return True, "weights file not generated (optional)"
         
-        # For actual implementation, would load and compare model weights
-        # This depends on model framework (sklearn, xgboost, etc.)
-        return True, "weights comparison not implemented"
+        # Both files exist but comparison not implemented
+        raise NotImplementedError(
+            "Model weights comparison not implemented; implement framework-specific "
+            "loading and comparison for your ML framework (e.g., sklearn, xgboost, "
+            "tensorflow) to verify deterministic weight initialization and training"
+        )
     
     def _clean_dirs(self) -> None:
         """Remove previous test runs."""
