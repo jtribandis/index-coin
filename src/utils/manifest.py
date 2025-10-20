@@ -30,21 +30,30 @@ class ManifestGenerator:
         
         for symbol in symbols:
             file_path = self.data_dir / f"{symbol}.csv"
-            if file_path.exists():
-                with open(file_path, 'rb') as f:
-                    file_hash = hashlib.sha256(f.read()).hexdigest()
-                
-                manifest["symbols"][symbol] = {
-                    "file": f"{symbol}.csv",
-                    "sha256": file_hash,
-                    "size_bytes": file_path.stat().st_size
-                }
-            else:
+            
+            try:
+                if file_path.exists():
+                    with open(file_path, 'rb') as f:
+                        file_hash = hashlib.sha256(f.read()).hexdigest()
+                    
+                    manifest["symbols"][symbol] = {
+                        "file": f"{symbol}.csv",
+                        "sha256": file_hash,
+                        "size_bytes": file_path.stat().st_size
+                    }
+                else:
+                    manifest["symbols"][symbol] = {
+                        "file": f"{symbol}.csv",
+                        "sha256": None,
+                        "size_bytes": 0,
+                        "error": "File not found"
+                    }
+            except OSError as e:
                 manifest["symbols"][symbol] = {
                     "file": f"{symbol}.csv",
                     "sha256": None,
                     "size_bytes": 0,
-                    "error": "File not found"
+                    "error": str(e)
                 }
         
         return manifest
