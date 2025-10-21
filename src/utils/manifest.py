@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -29,21 +30,30 @@ class ManifestGenerator:
             Dictionary containing manifest data
         """
         manifest: Dict[str, Any] = {
-            "generated_at": None,  # Will be set by caller if needed
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "symbols": {},
         }
 
         for symbol in symbols:
             file_path = self.data_dir / f"{symbol}.csv"
             if file_path.exists():
-                with open(file_path, "rb") as f:
-                    file_hash = hashlib.sha256(f.read()).hexdigest()
-
-                manifest["symbols"][symbol] = {
-                    "file": f"{symbol}.csv",
-                    "sha256": file_hash,
-                    "size_bytes": file_path.stat().st_size,
-                }
+                try:
+                    with open(file_path, "rb") as f:
+                        data = f.read()
+                    file_hash = hashlib.sha256(data).hexdigest()
+                    size_bytes = file_path.stat().st_size
+                    manifest["symbols"][symbol] = {
+                        "file": f"{symbol}.csv",
+                        "sha256": file_hash,
+                        "size_bytes": size_bytes,
+                    }
+                except (OSError, PermissionError) as e:
+                    manifest["symbols"][symbol] = {
+                        "file": f"{symbol}.csv",
+                        "sha256": None,
+                        "size_bytes": 0,
+                        "error": f"Failed to read file: {e}",
+                    }
             else:
                 manifest["symbols"][symbol] = {
                     "file": f"{symbol}.csv",
