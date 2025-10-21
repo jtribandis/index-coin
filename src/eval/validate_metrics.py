@@ -5,7 +5,6 @@ Tech Spec Section 8.1 - Metric definitions with valid ranges.
 """
 
 import json
-import numbers
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -127,8 +126,8 @@ class MetricsValidator:
             if metric not in self.BOUNDS:
                 continue  # Skip unknown metrics
 
-            # FIXED: Guard against non-numeric values with explicit type check
-            if not isinstance(value, numbers.Real):
+            # FIXED: Guard against non-numeric values with explicit type check (including NumPy types)
+            if not isinstance(value, (int, float, np.integer, np.floating)):
                 # Non-numeric values should already be caught by _check_finiteness
                 # Skip here to avoid TypeError in comparisons
                 continue
@@ -163,8 +162,8 @@ class MetricsValidator:
         all_valid = True
 
         for metric, value in metrics.items():
-            # FIXED: Flag non-numeric values as errors instead of silently skipping
-            if not isinstance(value, numbers.Real):
+            # FIXED: Flag non-numeric values as errors instead of silently skipping (including NumPy types)
+            if not isinstance(value, (int, float, np.integer, np.floating)):
                 self.errors.append(
                     f"{metric} has invalid type: {type(value).__name__} (value: {value!r})"
                 )
@@ -200,9 +199,9 @@ class MetricsValidator:
             num_val = metrics[numerator]
             denom_val = metrics[denominator]
 
-            # FIXED: Guard against non-numeric values using numbers.Real
+            # FIXED: Guard against non-numeric values (including NumPy types)
             if not all(
-                isinstance(v, numbers.Real) for v in [dep_val, num_val, denom_val]
+                isinstance(v, (int, float, np.integer, np.floating)) for v in [dep_val, num_val, denom_val]
             ):
                 continue
 
@@ -257,10 +256,10 @@ class MetricsValidator:
         """Check special cases and common issues."""
         all_valid = True
 
-        # FIXED: Add type guards for all special case checks
+        # FIXED: Add type guards for all special case checks (including NumPy types)
         # MaxDD should be negative or zero
         if "MaxDD" in metrics:
-            if isinstance(metrics["MaxDD"], numbers.Real) and metrics["MaxDD"] > 0:
+            if isinstance(metrics["MaxDD"], (int, float, np.integer, np.floating)) and metrics["MaxDD"] > 0:
                 self.errors.append(
                     f"MaxDD must be non-positive: {metrics['MaxDD']:.4f}"
                 )
@@ -268,14 +267,14 @@ class MetricsValidator:
 
         # CVaR should be negative (losses)
         if "CVaR95" in metrics:
-            if isinstance(metrics["CVaR95"], numbers.Real) and metrics["CVaR95"] > 0:
+            if isinstance(metrics["CVaR95"], (int, float, np.integer, np.floating)) and metrics["CVaR95"] > 0:
                 self.errors.append(
                     f"CVaR95 must be non-positive: {metrics['CVaR95']:.4f}"
                 )
                 all_valid = False
 
         # Turnover warning
-        if "Turnover" in metrics and isinstance(metrics["Turnover"], numbers.Real):
+        if "Turnover" in metrics and isinstance(metrics["Turnover"], (int, float, np.integer, np.floating)):
             if metrics["Turnover"] > 2.0:
                 self.warnings.append(
                     f"High turnover detected: {metrics['Turnover']:.2f} (>200%/yr)"
@@ -283,7 +282,7 @@ class MetricsValidator:
 
         # Cost drag warning
         if "CostDrag_bps" in metrics and isinstance(
-            metrics["CostDrag_bps"], numbers.Real
+            metrics["CostDrag_bps"], (int, float, np.integer, np.floating)
         ):
             if metrics["CostDrag_bps"] > 50:
                 self.warnings.append(
@@ -292,7 +291,7 @@ class MetricsValidator:
 
         # Risk-Off percentage reasonableness
         if "RiskOff_pct" in metrics and isinstance(
-            metrics["RiskOff_pct"], numbers.Real
+            metrics["RiskOff_pct"], (int, float, np.integer, np.floating)
         ):
             if metrics["RiskOff_pct"] > 0.5:
                 self.warnings.append(
@@ -303,7 +302,7 @@ class MetricsValidator:
 
         # Ulcer should be less than or comparable to |MaxDD|
         if all(k in metrics for k in ["Ulcer", "MaxDD"]):
-            if all(isinstance(metrics[k], numbers.Real) for k in ["Ulcer", "MaxDD"]):
+            if all(isinstance(metrics[k], (int, float, np.integer, np.floating)) for k in ["Ulcer", "MaxDD"]):
                 if abs(metrics["MaxDD"]) > 1e-10:  # Avoid division by near-zero
                     if metrics["Ulcer"] > abs(metrics["MaxDD"]) * 1.5:
                         self.warnings.append(
