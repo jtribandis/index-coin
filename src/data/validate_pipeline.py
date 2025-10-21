@@ -80,9 +80,6 @@ class DataValidator:
         try:
             with open(manifest_path) as f:
                 manifest = json.load(f)
-        except FileNotFoundError:
-            self.errors.append(f"Manifest file not found: {manifest_path}")
-            return {"valid": False}
         except PermissionError as e:
             self.errors.append(
                 f"Permission denied reading manifest {manifest_path}: {e}"
