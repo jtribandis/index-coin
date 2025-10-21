@@ -8,7 +8,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import pandas as pd
 import numpy as np
 
@@ -25,6 +25,25 @@ class DataValidator:
         self.strict = strict
         self.errors: List[str] = []
         self.warnings: List[str] = []
+        self._panel: Optional[pd.DataFrame] = None
+
+    def _load_panel(self) -> Optional[pd.DataFrame]:
+        """Load and cache panel data, return None if fails."""
+        if self._panel is not None:
+            return self._panel
+
+        panel_path = Path("data/staging/panel.parquet")
+        
+        if not panel_path.exists():
+            self.errors.append("Missing panel.parquet")
+            return None
+
+        try:
+            self._panel = pd.read_parquet(panel_path)
+            return self._panel
+        except Exception as e:
+            self.errors.append(f"Failed reading panel.parquet: {e}")
+            return None
 
     def validate_all(self) -> Dict[str, Any]:
         """Run complete validation suite."""
@@ -113,16 +132,14 @@ class DataValidator:
 
     def validate_panel(self) -> Dict[str, Any]:
         """Validate staging panel structure (Tech Spec 2.3)."""
-        panel_path = Path("data/staging/panel.parquet")
-
-        if not panel_path.exists():
-            self.errors.append("Missing panel.parquet")
+        panel = self._load_panel()
+        
+        if panel is None:
             return {"valid": False}
 
-        try:
-            panel = pd.read_parquet(panel_path)
-        except Exception as e:
-            self.errors.append(f"Failed reading panel.parquet: {e}")
+        # Check for empty panel
+        if panel.empty:
+            self.errors.append("Panel is empty (no rows)")
             return {"valid": False}
 
         # Check for expected columns
@@ -138,16 +155,24 @@ class DataValidator:
             self.errors.append("Panel index is not DatetimeIndex")
             return {"valid": False}
 
+        # Use min/max to handle unsorted indices and avoid IndexError
+        date_min = panel.index.min()
+        date_max = panel.index.max()
+
         return {
             "valid": True,
             "rows": len(panel),
-            "date_range": f"{panel.index[0]} to {panel.index[-1]}",
+            "date_range": f"{date_min} to {date_max}",
             "columns": len(panel.columns),
         }
 
     def validate_gaps(self) -> Dict[str, Any]:
         """Check for excessive data gaps (Tech Spec 2.3)."""
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        
+        if panel is None:
+            return {"valid": False}
+
         gap_violations: List[str] = []
 
         for symbol in self.SYMBOLS:
@@ -184,7 +209,11 @@ class DataValidator:
 
     def validate_returns(self) -> Dict[str, Any]:
         """Detect extreme returns indicating data errors (Tech Spec 13.2)."""
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        
+        if panel is None:
+            return {"valid": False}
+
         returns = panel.pct_change()
 
         extreme_events: List[Dict[str, Any]] = []
@@ -211,7 +240,11 @@ class DataValidator:
 
     def validate_btc_alignment(self) -> Dict[str, Any]:
         """Verify BTC 7-day data aligned to business calendar (Tech Spec 2.3)."""
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        
+        if panel is None:
+            return {"valid": False}
+
         btc_col = "BTC-USD_adj"
 
         if btc_col not in panel.columns:
@@ -237,7 +270,10 @@ class DataValidator:
         """Verify dividend reinvestment calculation (Tech Spec 2.2)."""
         # This is a simplified check - in production you'd compute explicit
         # reinvestment and compare to Adjusted Close
-        panel = pd.read_parquet("data/staging/panel.parquet")
+        panel = self._load_panel()
+        
+        if panel is None:
+            return {"valid": False}
 
         etf_symbols = ["GLD", "QQQ", "SPY", "SMH", "IYR", "ANGL"]
         results: Dict[str, Dict[str, float]] = {}
