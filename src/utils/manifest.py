@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -68,7 +67,7 @@ class ManifestGenerator:
         """Save manifest to JSON file."""
         try:
             # Ensure parent directory exists
-            os.makedirs(os.path.dirname(self.manifest_path), exist_ok=True)
+            self.manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
             with open(self.manifest_path, "w") as f:
                 json.dump(manifest, f, indent=2)
