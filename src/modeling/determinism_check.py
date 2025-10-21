@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 
 
 class DeterminismChecker:
@@ -322,20 +323,32 @@ class DeterminismChecker:
             diff_cols: List[str] = []
             for col in features1.columns:
                 if col in features2.columns:
-                    if not np.allclose(
-                        features1[col],
-                        features2[col],
-                        rtol=1e-10,
-                        atol=1e-12,
-                        equal_nan=True,
-                    ):
-                        diff_cols.append(col)
-                        if self.verbose:
-                            max_diff = np.max(np.abs(features1[col] - features2[col]))
-                            self._log(
-                                f"Column '{col}' differs - max diff: {max_diff:.2e}",
-                                "WARN",
-                            )
+                    # Check if column is numeric
+                    if is_numeric_dtype(features1[col]) and is_numeric_dtype(features2[col]):
+                        # Use np.allclose for numeric columns
+                        if not np.allclose(
+                            features1[col],
+                            features2[col],
+                            rtol=1e-10,
+                            atol=1e-12,
+                            equal_nan=True,
+                        ):
+                            diff_cols.append(col)
+                            if self.verbose:
+                                max_diff = np.max(np.abs(features1[col] - features2[col]))
+                                self._log(
+                                    f"Column '{col}' differs - max diff: {max_diff:.2e}",
+                                    "WARN",
+                                )
+                    else:
+                        # Use Series.equals for non-numeric or datetime columns
+                        if not features1[col].equals(features2[col]):
+                            diff_cols.append(col)
+                            if self.verbose:
+                                self._log(
+                                    f"Column '{col}' differs (non-numeric comparison)",
+                                    "WARN",
+                                )
 
             return False, f"Features differ in columns: {diff_cols}"
 
