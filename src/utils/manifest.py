@@ -91,6 +91,9 @@ class ManifestGenerator:
             # logger.error(f"Failed to parse manifest file: {e}")
             print(f"Warning: Failed to parse manifest file {self.manifest_path}: {e}")
             return None
+        except (OSError, IOError) as e:
+            print(f"Warning: Failed to read manifest file {self.manifest_path}: {e}")
+            return None
 
     def validate_manifest(self, symbols: List[str]) -> Dict[str, Any]:
         """
