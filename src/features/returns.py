@@ -80,11 +80,11 @@ def compute_total_return(cumulative_returns: pd.Series) -> float:
     if not isinstance(cumulative_returns, pd.Series):
         raise TypeError("cumulative_returns must be a pandas Series")
     
+    if not pd.api.types.is_numeric_dtype(cumulative_returns):
+        raise ValueError("cumulative_returns must contain numeric dtype")
+
     if len(cumulative_returns) == 0:
         raise ValueError("cumulative_returns series cannot be empty")
-    
-    if not pd.api.types.is_numeric_dtype(cumulative_returns):
-        raise ValueError("cumulative_returns must contain numeric values")
 
     return float(cumulative_returns.iloc[-1] - 1.0)
 
@@ -109,7 +109,7 @@ def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Ser
     if len(returns) == 0:
         raise ValueError("returns series cannot be empty")
     if not pd.api.types.is_numeric_dtype(returns):
-        raise TypeError("returns must contain numeric dtype")
+        raise ValueError("returns must contain numeric dtype")
     if periods_per_year <= 0:
         raise ValueError("periods_per_year must be positive")
 
