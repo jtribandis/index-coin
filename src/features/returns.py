@@ -27,6 +27,8 @@ def compute_daily_returns(prices: pd.Series) -> pd.Series:
         raise ValueError("prices must contain numeric values")
     if (prices < 0).any():
         raise ValueError("prices cannot contain negative values")
+    if (prices == 0).any():
+        raise ValueError("prices cannot contain zeros")
 
     # Do not forward/backward fill to avoid silently propagating values.
     return prices.pct_change(fill_method=None)
