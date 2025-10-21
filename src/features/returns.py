@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import numpy as np
 
 
 def compute_daily_returns(prices: pd.Series) -> pd.Series:
@@ -88,7 +89,10 @@ def compute_total_return(cumulative_returns: pd.Series) -> float:
     if len(cumulative_returns) == 0:
         raise ValueError("cumulative_returns series cannot be empty")
 
-    return float(cumulative_returns.iloc[-1] - 1.0)
+    last = cumulative_returns.iloc[-1]
+    if not np.isfinite(last):
+        raise ValueError("cumulative_returns final value must be finite")
+    return float(last - 1.0)
 
 
 def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Series:
