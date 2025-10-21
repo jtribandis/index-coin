@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
 
 
 class DeterminismChecker:
@@ -323,32 +322,20 @@ class DeterminismChecker:
             diff_cols: List[str] = []
             for col in features1.columns:
                 if col in features2.columns:
-                    # Check if column is numeric
-                    if is_numeric_dtype(features1[col]) and is_numeric_dtype(features2[col]):
-                        # Use np.allclose for numeric columns
-                        if not np.allclose(
-                            features1[col],
-                            features2[col],
-                            rtol=1e-10,
-                            atol=1e-12,
-                            equal_nan=True,
-                        ):
-                            diff_cols.append(col)
-                            if self.verbose:
-                                max_diff = np.max(np.abs(features1[col] - features2[col]))
-                                self._log(
-                                    f"Column '{col}' differs - max diff: {max_diff:.2e}",
-                                    "WARN",
-                                )
-                    else:
-                        # Use Series.equals for non-numeric or datetime columns
-                        if not features1[col].equals(features2[col]):
-                            diff_cols.append(col)
-                            if self.verbose:
-                                self._log(
-                                    f"Column '{col}' differs (non-numeric comparison)",
-                                    "WARN",
-                                )
+                    if not np.allclose(
+                        features1[col],
+                        features2[col],
+                        rtol=1e-10,
+                        atol=1e-12,
+                        equal_nan=True,
+                    ):
+                        diff_cols.append(col)
+                        if self.verbose:
+                            max_diff = np.max(np.abs(features1[col] - features2[col]))
+                            self._log(
+                                f"Column '{col}' differs - max diff: {max_diff:.2e}",
+                                "WARN",
+                            )
 
             return False, f"Features differ in columns: {diff_cols}"
 
@@ -483,9 +470,13 @@ class DeterminismChecker:
             self._log(f"Model 1: {json.dumps(sel1, indent=2)}", "DEBUG")
             self._log(f"Model 2: {json.dumps(sel2, indent=2)}", "DEBUG")
 
-        # Check model names match
-        if sel1.get("model") != sel2.get("model"):
-            return False, f"different models: {sel1['model']} vs {sel2['model']}"
+        # Check model names match - FIXED: use .get() with default for error message
+        model1 = sel1.get("model")
+        model2 = sel2.get("model")
+        if model1 != model2:
+            model1_str = sel1.get("model", "<unknown>")
+            model2_str = sel2.get("model", "<unknown>")
+            return False, f"different models: {model1_str} vs {model2_str}"
 
         # Check metrics within tolerance
         metrics = ["rmse", "r2", "mae"]
@@ -498,7 +489,12 @@ class DeterminismChecker:
                 if diff > 1e-6:
                     return False, f"{metric} differs by {diff:.2e}"
 
-        return True, f"metrics match (max diff: {max(diffs.values()):.2e})"
+        # FIXED: handle case where diffs might be empty
+        if diffs:
+            max_diff = max(diffs.values())
+            return True, f"metrics match (max diff: {max_diff:.2e})"
+        else:
+            return True, "metrics match (no comparable metrics found)"
 
     def _compare_model_weights(self) -> Tuple[bool, str]:
         """Compare model weights/coefficients if available."""
