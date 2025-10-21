@@ -98,6 +98,22 @@ class MetricsValidator:
 
         print("🔍 Validating financial metrics...")
 
+        # FIXED: Check that at least one known metric key exists
+        known_metric_keys = set(self.BOUNDS.keys())
+        provided_keys = set(metrics.keys())
+        known_keys_intersection = known_metric_keys.intersection(provided_keys)
+        
+        if not known_keys_intersection:
+            error_msg = (
+                f"No known metrics found in input. "
+                f"Expected at least one of: {sorted(known_metric_keys)}, "
+                f"but got: {sorted(provided_keys)}"
+            )
+            self.errors.append(error_msg)
+            print(f"❌ {error_msg}")
+            self._print_summary()
+            return False
+
         # FIXED: Check finiteness FIRST to catch non-numeric, NaN, and Inf values early
         finiteness_valid = self._check_finiteness(metrics)
 
