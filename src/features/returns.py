@@ -79,7 +79,7 @@ def compute_total_return(cumulative_returns: pd.Series) -> float:
     """
     if not isinstance(cumulative_returns, pd.Series):
         raise TypeError("cumulative_returns must be a pandas Series")
-    
+
     if not pd.api.types.is_numeric_dtype(cumulative_returns):
         raise ValueError("cumulative_returns must contain numeric dtype")
 

@@ -33,7 +33,7 @@ class DataValidator:
             return self._panel
 
         panel_path = Path("data/staging/panel.parquet")
-        
+
         if not panel_path.exists():
             self.errors.append("Missing panel.parquet")
             return None
@@ -84,7 +84,9 @@ class DataValidator:
             self.errors.append(f"Manifest file not found: {manifest_path}")
             return {"valid": False}
         except PermissionError as e:
-            self.errors.append(f"Permission denied reading manifest {manifest_path}: {e}")
+            self.errors.append(
+                f"Permission denied reading manifest {manifest_path}: {e}"
+            )
             return {"valid": False}
         except json.JSONDecodeError as e:
             self.errors.append(f"Invalid JSON in manifest {manifest_path}: {e}")
@@ -133,7 +135,7 @@ class DataValidator:
     def validate_panel(self) -> Dict[str, Any]:
         """Validate staging panel structure (Tech Spec 2.3)."""
         panel = self._load_panel()
-        
+
         if panel is None:
             return {"valid": False}
 
@@ -169,7 +171,7 @@ class DataValidator:
     def validate_gaps(self) -> Dict[str, Any]:
         """Check for excessive data gaps (Tech Spec 2.3)."""
         panel = self._load_panel()
-        
+
         if panel is None:
             return {"valid": False}
 
@@ -210,7 +212,7 @@ class DataValidator:
     def validate_returns(self) -> Dict[str, Any]:
         """Detect extreme returns indicating data errors (Tech Spec 13.2)."""
         panel = self._load_panel()
-        
+
         if panel is None:
             return {"valid": False}
 
@@ -241,7 +243,7 @@ class DataValidator:
     def validate_btc_alignment(self) -> Dict[str, Any]:
         """Verify BTC 7-day data aligned to business calendar (Tech Spec 2.3)."""
         panel = self._load_panel()
-        
+
         if panel is None:
             return {"valid": False}
 
@@ -271,7 +273,7 @@ class DataValidator:
         # This is a simplified check - in production you'd compute explicit
         # reinvestment and compare to Adjusted Close
         panel = self._load_panel()
-        
+
         if panel is None:
             return {"valid": False}
 

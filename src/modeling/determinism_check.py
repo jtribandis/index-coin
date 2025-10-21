@@ -77,8 +77,7 @@ class DeterminismChecker:
 
                 # Determine if this is an optional skip (non-fatal missing files)
                 is_optional_skip = (
-                    not passed
-                    and "(optional check - non-fatal)" in details.lower()
+                    not passed and "(optional check - non-fatal)" in details.lower()
                 )
 
                 if passed:
@@ -106,7 +105,11 @@ class DeterminismChecker:
             except Exception as e:
                 print(f"  ❌ ERROR: {str(e)}\n")
                 self.errors.append(f"{name}: {str(e)}")
-                results[name] = {"passed": False, "error": str(e), "optional_skip": False}
+                results[name] = {
+                    "passed": False,
+                    "error": str(e),
+                    "optional_skip": False,
+                }
                 all_passed = False
 
         # Save results

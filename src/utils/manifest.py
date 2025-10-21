@@ -59,7 +59,7 @@ class ManifestGenerator:
         try:
             # Ensure parent directory exists
             os.makedirs(os.path.dirname(self.manifest_path), exist_ok=True)
-            
+
             with open(self.manifest_path, "w") as f:
                 json.dump(manifest, f, indent=2)
         except (PermissionError, OSError, IOError) as e:

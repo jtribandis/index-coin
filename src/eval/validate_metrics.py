@@ -200,7 +200,9 @@ class MetricsValidator:
             denom_val = metrics[denominator]
 
             # FIXED: Guard against non-numeric values
-            if not all(isinstance(v, (int, float)) for v in [dep_val, num_val, denom_val]):
+            if not all(
+                isinstance(v, (int, float)) for v in [dep_val, num_val, denom_val]
+            ):
                 continue
 
             # Skip if dependent or numerator are infinite or NaN
@@ -279,12 +281,18 @@ class MetricsValidator:
                 )
 
         # Cost drag warning
-        if "CostDrag_bps" in metrics and isinstance(metrics["CostDrag_bps"], (int, float)):
+        if "CostDrag_bps" in metrics and isinstance(
+            metrics["CostDrag_bps"], (int, float)
+        ):
             if metrics["CostDrag_bps"] > 50:
-                self.warnings.append(f"High cost drag: {metrics['CostDrag_bps']:.1f} bps")
+                self.warnings.append(
+                    f"High cost drag: {metrics['CostDrag_bps']:.1f} bps"
+                )
 
         # Risk-Off percentage reasonableness
-        if "RiskOff_pct" in metrics and isinstance(metrics["RiskOff_pct"], (int, float)):
+        if "RiskOff_pct" in metrics and isinstance(
+            metrics["RiskOff_pct"], (int, float)
+        ):
             if metrics["RiskOff_pct"] > 0.5:
                 self.warnings.append(
                     f"High Risk-Off time: {metrics['RiskOff_pct']:.1%}"
