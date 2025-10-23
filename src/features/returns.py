@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import numpy as np
 
 
 def compute_daily_returns(prices: pd.Series) -> pd.Series:
@@ -23,8 +24,12 @@ def compute_daily_returns(prices: pd.Series) -> pd.Series:
         raise TypeError("prices must be a pandas Series")
     if len(prices) == 0:
         raise ValueError("prices series cannot be empty")
+    if not pd.api.types.is_numeric_dtype(prices):
+        raise ValueError("prices must contain numeric values")
     if (prices < 0).any():
         raise ValueError("prices cannot contain negative values")
+    if (prices == 0).any():
+        raise ValueError("prices cannot contain zeros")
 
     # Do not forward/backward fill to avoid silently propagating values.
     return prices.pct_change(fill_method=None)
@@ -32,19 +37,41 @@ def compute_daily_returns(prices: pd.Series) -> pd.Series:
 
 def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
     """
-    Compute cumulative value series from periodic returns, initializing the starting value to 1.0.
+    Compute cumulative value series from periodic returns.
 
     Parameters:
         returns (pd.Series): Series of periodic returns (e.g., daily returns). NaN values are allowed and indicate missing returns.
 
     Returns:
-        pd.Series: Cumulative value series with the same index and length as `returns`. The first element is 1.0 and subsequent elements represent the compounded value: V_t = V_{t-1} * (1 + r_{t-1}). When a return is NaN, the cumulative value is carried forward unchanged.
+        pd.Series: Cumulative value series with the same index and length as `returns`.
+        - If the first return is not NaN, the first element is 1 + first_return
+        - If the first return is NaN, the first element is 1.0 and subsequent elements represent the compounded value: V_t = V_{t-1} * (1 + r_{t-1}).
+        When a return is NaN, the cumulative value is carried forward unchanged.
 
     Raises:
         TypeError: If `returns` is not a pandas Series.
         ValueError: If `returns` is empty or contains non-numeric (non-NaN) values.
     """
-    return (1 + returns.fillna(0)).cumprod()
+    if not isinstance(returns, pd.Series):
+        raise TypeError("returns must be a pandas Series")
+    if len(returns) == 0:
+        raise ValueError("returns series cannot be empty")
+    if not pd.api.types.is_numeric_dtype(returns):
+        raise ValueError("returns must contain numeric values")
+
+    # Disallow infinite returns; allow NaN
+    if not np.isfinite(returns.dropna().to_numpy()).all():
+        raise ValueError("returns must be finite (no +/-inf)")
+
+    # Handle the case where first return is NaN (typical from pct_change)
+    if pd.isna(returns.iloc[0]):
+        # First element is 1.0, then apply returns from second element
+        result = (1 + returns.fillna(0)).cumprod()
+        result.iloc[0] = 1.0
+        return result
+    else:
+        # First element is 1 + first_return, then compound from there
+        return (1 + returns.fillna(0)).cumprod()
 
 
 def compute_total_return(cumulative_returns: pd.Series) -> float:
@@ -62,8 +89,13 @@ def compute_total_return(cumulative_returns: pd.Series) -> float:
 
     if len(cumulative_returns) == 0:
         raise ValueError("cumulative_returns series cannot be empty")
+    if not pd.api.types.is_numeric_dtype(cumulative_returns):
+        raise ValueError("cumulative_returns must contain numeric values")
 
-    return float(cumulative_returns.iloc[-1] - 1.0)
+    last = cumulative_returns.iloc[-1]
+    if not np.isfinite(last):
+        raise ValueError("cumulative_returns final value must be finite")
+    return float(last - 1.0)
 
 
 def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Series:
@@ -79,10 +111,14 @@ def annualize_returns(returns: pd.Series, periods_per_year: int = 252) -> pd.Ser
 
     Raises:
         TypeError: If `returns` is not a pandas Series.
-        ValueError: If `periods_per_year` is not greater than 0.
+        ValueError: If `returns` is empty, contains non-numeric values, or `periods_per_year` <= 0.
     """
     if not isinstance(returns, pd.Series):
         raise TypeError("returns must be a pandas Series")
+    if len(returns) == 0:
+        raise ValueError("returns series cannot be empty")
+    if not pd.api.types.is_numeric_dtype(returns):
+        raise ValueError("returns must contain numeric dtype")
     if periods_per_year <= 0:
         raise ValueError("periods_per_year must be positive")
 
