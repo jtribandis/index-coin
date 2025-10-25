@@ -33,7 +33,7 @@ class EqualWeightBaseline:
         self.btc_year = btc_integration_year
 
         # Define clusters (Section 1.1)
-        self.clusters = {
+        self.clusters: dict[str, list[str]] = {
             "C1_crypto_tech": ["BTC-USD", "QQQ", "SMH"],
             "C2_bonds_reits": ["ANGL", "IYR"],
             "C3_commodities_beta": ["GLD", "SPY"],
