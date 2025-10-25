@@ -167,6 +167,8 @@ class EqualWeightBaseline:
                     )
                     / 2
                 )
+                # Log turnover for analysis
+                LOGGER.debug(f"Rebalance {rebalance_count}: turnover={turnover:.4f}")
 
                 # Apply transaction costs (one-way)
                 cost_bps = (
