@@ -167,6 +167,8 @@ class EqualWeightBaseline:
                     )
                     / 2
                 )
+                # Log turnover for analysis
+                LOGGER.debug(f"Rebalance {rebalance_count}: turnover={turnover:.4f}")
 
                 # Apply transaction costs (one-way)
                 cost_bps = (
@@ -409,7 +411,10 @@ def export_comparison_results(results, output_dir="web/public/data"):
 
     # 1. Export baseline NAV (Section 12.7)
     baseline_nav_df = pd.DataFrame(
-        {"date": results["baseline_nav"].index, "nav_baseline": results["baseline_nav"].values}
+        {
+            "date": results["baseline_nav"].index,
+            "nav_baseline": results["baseline_nav"].values,
+        }
     )
     baseline_nav_df.to_csv(output_path / "nav_baseline.csv", index=False)
     LOGGER.info("  ✓ nav_baseline.csv")
