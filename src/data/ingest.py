@@ -145,12 +145,16 @@ def fetch_all_symbols(start_date: str = "2009-01-01") -> Dict[str, Dict[str, obj
             date_max = df.index.max()
             summary[symbol] = {
                 "rows": int(len(df)),
-                "start": None
-                if pd.isna(date_min)
-                else pd.to_datetime(date_min).date().isoformat(),
-                "end": None
-                if pd.isna(date_max)
-                else pd.to_datetime(date_max).date().isoformat(),
+                "start": (
+                    None
+                    if pd.isna(date_min)
+                    else pd.to_datetime(date_min).date().isoformat()
+                ),
+                "end": (
+                    None
+                    if pd.isna(date_max)
+                    else pd.to_datetime(date_max).date().isoformat()
+                ),
             }
         except Exception as exc:
             LOGGER.exception("Error while processing %s: %s", symbol, exc)
@@ -233,12 +237,12 @@ def generate_manifest() -> Dict[str, Dict[str, object]]:
             symbol = os.path.splitext(os.path.basename(path))[0]
             manifest[symbol] = {
                 "rows": rows,
-                "date_min": None
-                if date_min_val is None
-                else date_min_val.date().isoformat(),
-                "date_max": None
-                if date_max_val is None
-                else date_max_val.date().isoformat(),
+                "date_min": (
+                    None if date_min_val is None else date_min_val.date().isoformat()
+                ),
+                "date_max": (
+                    None if date_max_val is None else date_max_val.date().isoformat()
+                ),
                 "sha256": sha256,
                 "size_kb": round(size_kb, 1),
             }

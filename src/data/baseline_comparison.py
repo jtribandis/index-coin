@@ -2,7 +2,7 @@
 Baseline Comparison Module for Index-Coin
 Implements Section 7.5 from tech spec.
 
-Validates hypothesis: "My ML risk methodology achieves better returns 
+Validates hypothesis: "My ML risk methodology achieves better returns
 with lower risk than a simple equal-weight baseline"
 """
 
@@ -189,10 +189,7 @@ class EqualWeightBaseline:
                 # Update holdings to target weights
                 holdings = {}
                 for asset in target_weights.keys():
-                    if (
-                        asset in price_data.columns
-                        and target_weights[asset] > 0
-                    ):
+                    if asset in price_data.columns and target_weights[asset] > 0:
                         holdings[asset] = (
                             portfolio_value * target_weights[asset]
                         ) / price_data.loc[date, asset]
@@ -224,7 +221,7 @@ class EqualWeightBaseline:
 def calculate_baseline_metrics(baseline_nav, initial_nav=10000):
     """
     Calculate performance metrics for baseline strategy.
-    
+
     Implements Section 8.1 metric definitions from tech spec.
     """
     # Total return
@@ -259,9 +256,7 @@ def calculate_baseline_metrics(baseline_nav, initial_nav=10000):
     )
 
     # MAR ratio (Calmar)
-    mar_ratio = (
-        cagr_pct / abs(max_drawdown_pct) if max_drawdown_pct != 0 else np.nan
-    )
+    mar_ratio = cagr_pct / abs(max_drawdown_pct) if max_drawdown_pct != 0 else np.nan
 
     # CVaR (95%)
     cvar_95_pct = (
@@ -291,7 +286,7 @@ def compare_to_baseline(
 ):
     """
     Compare ML strategy to equal-weight baseline.
-    
+
     Implements Section 7.5.2 from tech spec.
 
     Args:
@@ -323,8 +318,7 @@ def compare_to_baseline(
         "drawdown_diff": ml_metrics["max_drawdown_pct"]
         - baseline_metrics["max_drawdown_pct"],
         "sharpe_diff": ml_metrics["sharpe_ratio"] - baseline_metrics["sharpe_ratio"],
-        "sortino_diff": ml_metrics["sortino_ratio"]
-        - baseline_metrics["sortino_ratio"],
+        "sortino_diff": ml_metrics["sortino_ratio"] - baseline_metrics["sortino_ratio"],
         "mar_diff": ml_metrics["mar_ratio"] - baseline_metrics["mar_ratio"],
         "volatility_diff": ml_metrics["volatility_pct"]
         - baseline_metrics["volatility_pct"],
@@ -346,9 +340,11 @@ def compare_to_baseline(
         "ml_metrics": ml_metrics,
         "improvements": improvements,
         "verdict": verdict,
-        "status": "PASS"
-        if improvements["cagr_diff"] > 0 and improvements["sharpe_diff"] > 0
-        else "REVIEW",
+        "status": (
+            "PASS"
+            if improvements["cagr_diff"] > 0 and improvements["sharpe_diff"] > 0
+            else "REVIEW"
+        ),
     }
 
 
@@ -409,7 +405,10 @@ def export_comparison_results(results, output_dir="web/public/data"):
 
     # 1. Export baseline NAV (Section 12.7)
     baseline_nav_df = pd.DataFrame(
-        {"date": results["baseline_nav"].index, "nav_baseline": results["baseline_nav"].values}
+        {
+            "date": results["baseline_nav"].index,
+            "nav_baseline": results["baseline_nav"].values,
+        }
     )
     baseline_nav_df.to_csv(output_path / "nav_baseline.csv", index=False)
     LOGGER.info("  ✓ nav_baseline.csv")

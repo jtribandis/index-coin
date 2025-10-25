@@ -8,7 +8,6 @@ Outputs: data/staging/panel.parquet
 import logging
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 LOGGER = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ def create_business_day_calendar(start_date="2009-01-01", end_date=None):
 def load_raw_csv(symbol, raw_dir="data/raw"):
     """
     Load a single raw CSV from data/raw/.
-    
+
     Returns DataFrame with single column: {symbol}_adj
     """
     # Handle BTC-USD filename
@@ -170,7 +169,7 @@ def create_staging_panel(raw_dir="data/raw", output_dir="data/staging"):
     LOGGER.info(f"Columns: {list(panel.columns)}")
     LOGGER.info(f"Date range: {panel.index[0].date()} to {panel.index[-1].date()}")
     LOGGER.info(f"Output: {output_path}")
-    LOGGER.info(f"\nMissing values by asset:")
+    LOGGER.info("\nMissing values by asset:")
     for col in panel.columns:
         missing = panel[col].isna().sum()
         missing_pct = (missing / len(panel)) * 100
@@ -191,8 +190,8 @@ if __name__ == "__main__":
     print("SUMMARY")
     print("=" * 80)
     print(f"Panel shape: {panel.shape}")
-    print(f"\nFirst 5 rows:")
+    print("\nFirst 5 rows:")
     print(panel.head())
-    print(f"\nLast 5 rows:")
+    print("\nLast 5 rows:")
     print(panel.tail())
     print("\n✓ Ready for backtesting!")
