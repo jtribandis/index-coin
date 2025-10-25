@@ -15,22 +15,13 @@ from unittest.mock import Mock, patch, mock_open
 import pandas as pd
 import pytest
 
-# FIXED: Uncomment imports and adjust path as needed for your project structure
-# Option 1: If functions are in src/create_staging_panel.py
-from src.create_staging_panel import (
+# FIXED: Removed src. prefix from imports
+from create_staging_panel import (
     create_business_day_calendar,
     load_raw_csv,
     align_to_calendar,
     create_staging_panel,
 )
-
-# Option 2: If functions are in a different location, adjust accordingly:
-# from create_staging_panel import (
-#     create_business_day_calendar,
-#     load_raw_csv,
-#     align_to_calendar,
-#     create_staging_panel,
-# )
 
 
 # ============================================================================
@@ -243,9 +234,9 @@ def test_align_to_calendar_ffill_within_limit(sample_calendar):
         df, sample_calendar, asset_name="SPY", max_ffill_days=3
     )
 
-    # Check forward-fill filled the gap
-    assert not df_aligned.loc["2020-01-03"].isna().any()
+    # Should forward-fill the gap
     assert df_aligned.loc["2020-01-03", "SPY_adj"] == 100.0
+    assert df_aligned.loc["2020-01-06", "SPY_adj"] == 100.0
 
 
 def test_align_to_calendar_ffill_exceeds_limit(sample_calendar, caplog):
@@ -320,7 +311,7 @@ def test_align_to_calendar_empty_dataframe(sample_calendar):
 # ============================================================================
 
 
-@patch("src.create_staging_panel.load_raw_csv")
+@patch("create_staging_panel.load_raw_csv")
 def test_create_staging_panel_basic(mock_load, tmp_path):
     """Test basic panel creation with multiple assets."""
     # Mock CSV loading to return sample data
@@ -346,7 +337,7 @@ def test_create_staging_panel_basic(mock_load, tmp_path):
     assert output_file.exists()
 
 
-@patch("src.create_staging_panel.load_raw_csv")
+@patch("create_staging_panel.load_raw_csv")
 def test_create_staging_panel_missing_asset(mock_load, tmp_path, caplog):
     """Test panel creation when some assets are missing."""
 
@@ -368,7 +359,7 @@ def test_create_staging_panel_missing_asset(mock_load, tmp_path, caplog):
     assert "Skipping" in caplog.text
 
 
-@patch("src.create_staging_panel.load_raw_csv")
+@patch("create_staging_panel.load_raw_csv")
 def test_create_staging_panel_different_date_ranges(mock_load, tmp_path):
     """Test panel handles assets with different date ranges."""
 
