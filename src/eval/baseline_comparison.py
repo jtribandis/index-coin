@@ -9,6 +9,7 @@ with lower risk than a simple equal-weight baseline"
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -28,7 +29,7 @@ class EqualWeightBaseline:
     - Same transaction costs as ML strategy (ETF: 5bps, BTC: 15bps)
     """
 
-    def __init__(self, btc_integration_year=2020):
+    def __init__(self, btc_integration_year: int = 2020) -> None:
         self.btc_year = btc_integration_year
 
         # Define clusters (Section 1.1)
@@ -38,7 +39,7 @@ class EqualWeightBaseline:
             "C3_commodities_beta": ["GLD", "SPY"],
         }
 
-    def get_weights(self, date):
+    def get_weights(self, date: pd.Timestamp) -> dict[str, float]:
         """
         Get equal weights for given date.
 
@@ -79,8 +80,12 @@ class EqualWeightBaseline:
             }
 
     def run_backtest(
-        self, price_data, initial_nav=10000, rebalance_freq="M", transaction_costs=None
-    ):
+        self,
+        price_data: pd.DataFrame,
+        initial_nav: float = 10000,
+        rebalance_freq: str = "M",
+        transaction_costs: dict[str, float] | None = None,
+    ) -> pd.Series:  # type: ignore[type-arg]
         """
         Run baseline backtest with same mechanics as ML strategy.
 
@@ -121,7 +126,7 @@ class EqualWeightBaseline:
         current_weights = self.get_weights(price_data.index[0])
 
         # Track holdings (shares)
-        holdings = {}
+        holdings: dict[str, float] = {}
         for asset in current_weights.keys():
             if asset in price_data.columns and current_weights[asset] > 0:
                 holdings[asset] = (
@@ -205,7 +210,7 @@ class EqualWeightBaseline:
 
         return nav
 
-    def _normalize_column_names(self, price_data):
+    def _normalize_column_names(self, price_data: pd.DataFrame) -> pd.DataFrame:
         """Handle different column naming conventions"""
         rename_map = {}
         for col in price_data.columns:
@@ -220,79 +225,79 @@ class EqualWeightBaseline:
         return price_data.rename(columns=rename_map)
 
 
-def calculate_baseline_metrics(baseline_nav, initial_nav=10000):
+def calculate_baseline_metrics(
+    nav: pd.Series, initial_nav: float = 10000  # type: ignore[type-arg]
+) -> dict[str, float]:
     """
     Calculate performance metrics for baseline strategy.
 
-    Implements Section 8.1 metric definitions from tech spec.
-    """
-    # Total return
-    total_return_pct = (baseline_nav.iloc[-1] / initial_nav - 1) * 100
+    Matches metrics calculated for ML strategy (Section 7.4).
 
-    # Time period
-    n_years = (baseline_nav.index[-1] - baseline_nav.index[0]).days / 365.25
+    Returns:
+        dict with keys:
+        - cagr_pct: Compound annual growth rate (%)
+        - max_drawdown_pct: Maximum drawdown (%)
+        - sharpe_ratio: Risk-adjusted returns (annualized)
+        - sortino_ratio: Downside risk-adjusted returns
+        - mar_ratio: Return / Max Drawdown
+        - volatility_pct: Annualized volatility (%)
+        - final_nav: Final portfolio value
+    """
+    # Calculate daily returns
+    daily_returns = nav.pct_change().dropna()
+
+    # Trading days per year (Section 5.7)
+    trading_days_per_year = 252
 
     # CAGR
-    cagr_pct = ((baseline_nav.iloc[-1] / initial_nav) ** (1 / n_years) - 1) * 100
+    years = len(nav) / trading_days_per_year
+    cagr = (nav.iloc[-1] / initial_nav) ** (1 / years) - 1
 
-    # Drawdown analysis
-    rolling_max = baseline_nav.expanding().max()
-    drawdowns = (baseline_nav - rolling_max) / rolling_max
-    max_drawdown_pct = drawdowns.min() * 100
+    # Max Drawdown
+    cumulative = nav / nav.cummax()
+    max_drawdown = (cumulative.min() - 1) * 100
 
-    # Daily returns
-    daily_returns = baseline_nav.pct_change().dropna()
+    # Sharpe Ratio (annualized)
+    sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(
+        trading_days_per_year
+    )
+
+    # Sortino Ratio (annualized, downside deviation only)
+    downside_returns = daily_returns[daily_returns < 0]
+    if len(downside_returns) > 0:
+        sortino = (daily_returns.mean() / downside_returns.std()) * np.sqrt(
+            trading_days_per_year
+        )
+    else:
+        sortino = np.inf
+
+    # MAR Ratio (CAGR / Max Drawdown)
+    mar = (cagr * 100) / abs(max_drawdown) if max_drawdown != 0 else np.inf
 
     # Volatility (annualized)
-    volatility_pct = daily_returns.std() * np.sqrt(252) * 100
-
-    # Sharpe ratio (2% risk-free rate, Section 8.1)
-    risk_free = 0.02
-    sharpe_ratio = (cagr_pct / 100 - risk_free) / (volatility_pct / 100)
-
-    # Sortino ratio
-    downside_returns = daily_returns[daily_returns < 0]
-    downside_std = downside_returns.std() * np.sqrt(252)
-    sortino_ratio = (
-        (cagr_pct / 100 - risk_free) / downside_std if downside_std > 0 else np.nan
-    )
-
-    # MAR ratio (Calmar)
-    mar_ratio = cagr_pct / abs(max_drawdown_pct) if max_drawdown_pct != 0 else np.nan
-
-    # CVaR (95%)
-    cvar_95_pct = (
-        daily_returns[daily_returns <= daily_returns.quantile(0.05)].mean() * 100
-    )
-
-    # Ulcer Index
-    ulcer_index_pct = np.sqrt((drawdowns**2).mean()) * 100
+    volatility = daily_returns.std() * np.sqrt(trading_days_per_year) * 100
 
     return {
-        "total_return_pct": total_return_pct,
-        "cagr_pct": cagr_pct,
-        "max_drawdown_pct": max_drawdown_pct,
-        "volatility_pct": volatility_pct,
-        "sharpe_ratio": sharpe_ratio,
-        "sortino_ratio": sortino_ratio,
-        "mar_ratio": mar_ratio,
-        "cvar_95_pct": cvar_95_pct,
-        "ulcer_index_pct": ulcer_index_pct,
-        "final_nav": baseline_nav.iloc[-1],
-        "n_years": n_years,
+        "cagr_pct": cagr * 100,
+        "max_drawdown_pct": max_drawdown,
+        "sharpe_ratio": sharpe,
+        "sortino_ratio": sortino,
+        "mar_ratio": mar,
+        "volatility_pct": volatility,
+        "final_nav": nav.iloc[-1],
     }
 
 
 def compare_to_baseline(
-    ml_nav_series, ml_metrics, price_data, initial_nav=10000, rebalance_freq="M"
-):
+    ml_metrics: dict[str, float],
+    price_data: pd.DataFrame,
+    initial_nav: float = 10000,
+    rebalance_freq: str = "M",
+) -> dict[str, Any]:
     """
-    Compare ML strategy to equal-weight baseline.
-
-    Implements Section 7.5.2 from tech spec.
+    Compare ML strategy to equal-weight baseline (Section 7.5).
 
     Args:
-        ml_nav_series: pd.Series of ML strategy NAV (from your backtest)
         ml_metrics: dict of ML strategy metrics
         price_data: DataFrame with asset prices
         initial_nav: Starting capital
@@ -350,7 +355,7 @@ def compare_to_baseline(
     }
 
 
-def generate_verdict(improvements):
+def generate_verdict(improvements: dict[str, float]) -> str:
     """Generate human-readable verdict (Section 7.5.2)"""
     cagr_better = improvements["cagr_diff"] > 0
     risk_better = improvements["drawdown_diff"] > 0  # Less negative is better
@@ -391,7 +396,9 @@ def generate_verdict(improvements):
         )
 
 
-def export_comparison_results(results, output_dir="web/public/data"):
+def export_comparison_results(
+    results: dict[str, Any], output_dir: str = "web/public/data"
+) -> str:
     """
     Export baseline comparison results (Section 12.7-12.9 from tech spec).
 
