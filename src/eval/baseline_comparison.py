@@ -226,7 +226,8 @@ class EqualWeightBaseline:
 
 
 def calculate_baseline_metrics(
-    nav: pd.Series, initial_nav: float = 10000  # type: ignore[type-arg]
+    nav: pd.Series,
+    initial_nav: float = 10000,  # type: ignore[type-arg]
 ) -> dict[str, float]:
     """
     Calculate performance metrics for baseline strategy.
