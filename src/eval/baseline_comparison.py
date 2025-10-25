@@ -216,6 +216,7 @@ class EqualWeightBaseline:
         for col in price_data.columns:
             # Remove _adj suffix if present
             clean_name = col.replace("_adj", "")
+
             # Handle BTC naming variations
             if clean_name in ["BTC", "BTCUSD", "BTC_USD"]:
                 rename_map[col] = "BTC-USD"
