@@ -85,7 +85,7 @@ class EqualWeightBaseline:
         initial_nav: float = 10000,
         rebalance_freq: str = "M",
         transaction_costs: dict[str, float] | None = None,
-    ) -> pd.Series:  # type: ignore[type-arg]
+    ) -> pd.Series:
         """
         Run baseline backtest with same mechanics as ML strategy.
 
@@ -227,7 +227,7 @@ class EqualWeightBaseline:
 
 def calculate_baseline_metrics(
     nav: pd.Series,
-    initial_nav: float = 10000,  # type: ignore[type-arg]
+    initial_nav: float = 10000,
 ) -> dict[str, float]:
     """
     Calculate performance metrics for baseline strategy.
@@ -238,69 +238,60 @@ def calculate_baseline_metrics(
         dict with keys:
         - cagr_pct: Compound annual growth rate (%)
         - max_drawdown_pct: Maximum drawdown (%)
-        - sharpe_ratio: Risk-adjusted returns (annualized)
-        - sortino_ratio: Downside risk-adjusted returns
-        - mar_ratio: Return / Max Drawdown
+        - sharpe_ratio: Risk-adjusted return ratio
+        - sortino_ratio: Downside risk-adjusted return
+        - mar_ratio: Return/risk ratio (CAGR / MaxDD)
         - volatility_pct: Annualized volatility (%)
         - final_nav: Final portfolio value
     """
-    # Calculate daily returns
-    daily_returns = nav.pct_change().dropna()
-
-    # Trading days per year (Section 5.7)
-    trading_days_per_year = 252
-
     # CAGR
-    years = len(nav) / trading_days_per_year
-    cagr = (nav.iloc[-1] / initial_nav) ** (1 / years) - 1
+    years = len(nav) / 252
+    total_return = nav.iloc[-1] / initial_nav
+    cagr_pct = (total_return ** (1 / years) - 1) * 100
 
     # Max Drawdown
-    cumulative = nav / nav.cummax()
-    max_drawdown = (cumulative.min() - 1) * 100
+    cummax = nav.expanding().max()
+    drawdowns = (nav - cummax) / cummax
+    max_drawdown_pct = drawdowns.min() * 100
 
-    # Sharpe Ratio (annualized)
-    sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(
-        trading_days_per_year
-    )
+    # Volatility
+    returns = nav.pct_change().dropna()
+    volatility_pct = returns.std() * np.sqrt(252) * 100
 
-    # Sortino Ratio (annualized, downside deviation only)
-    downside_returns = daily_returns[daily_returns < 0]
-    if len(downside_returns) > 0:
-        sortino = (daily_returns.mean() / downside_returns.std()) * np.sqrt(
-            trading_days_per_year
-        )
-    else:
-        sortino = np.inf
+    # Sharpe (assume 0% risk-free rate)
+    sharpe_ratio = (returns.mean() * 252) / (returns.std() * np.sqrt(252))
 
-    # MAR Ratio (CAGR / Max Drawdown)
-    mar = (cagr * 100) / abs(max_drawdown) if max_drawdown != 0 else np.inf
+    # Sortino (downside volatility only)
+    downside_returns = returns[returns < 0]
+    downside_vol = downside_returns.std() * np.sqrt(252)
+    sortino_ratio = (returns.mean() * 252) / downside_vol if downside_vol > 0 else 0.0
 
-    # Volatility (annualized)
-    volatility = daily_returns.std() * np.sqrt(trading_days_per_year) * 100
+    # MAR (Return / Risk)
+    mar_ratio = cagr_pct / abs(max_drawdown_pct) if max_drawdown_pct != 0 else 0.0
 
     return {
-        "cagr_pct": cagr * 100,
-        "max_drawdown_pct": max_drawdown,
-        "sharpe_ratio": sharpe,
-        "sortino_ratio": sortino,
-        "mar_ratio": mar,
-        "volatility_pct": volatility,
+        "cagr_pct": cagr_pct,
+        "max_drawdown_pct": max_drawdown_pct,
+        "sharpe_ratio": sharpe_ratio,
+        "sortino_ratio": sortino_ratio,
+        "mar_ratio": mar_ratio,
+        "volatility_pct": volatility_pct,
         "final_nav": nav.iloc[-1],
     }
 
 
 def compare_to_baseline(
-    ml_metrics: dict[str, float],
     price_data: pd.DataFrame,
+    ml_metrics: dict[str, float],
     initial_nav: float = 10000,
     rebalance_freq: str = "M",
 ) -> dict[str, Any]:
     """
-    Compare ML strategy to equal-weight baseline (Section 7.5).
+    Full baseline comparison (Section 7.5).
 
     Args:
-        ml_metrics: dict of ML strategy metrics
-        price_data: DataFrame with asset prices
+        price_data: Historical price data
+        ml_metrics: Metrics from ML strategy
         initial_nav: Starting capital
         rebalance_freq: Rebalancing frequency
 
