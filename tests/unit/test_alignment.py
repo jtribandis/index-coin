@@ -15,8 +15,17 @@ from unittest.mock import Mock, patch, mock_open
 import pandas as pd
 import pytest
 
-# Import functions to test (adjust import path as needed)
-# from src.create_staging_panel import (
+# FIXED: Uncomment imports and adjust path as needed for your project structure
+# Option 1: If functions are in src/create_staging_panel.py
+from src.create_staging_panel import (
+    create_business_day_calendar,
+    load_raw_csv,
+    align_to_calendar,
+    create_staging_panel,
+)
+
+# Option 2: If functions are in a different location, adjust accordingly:
+# from create_staging_panel import (
 #     create_business_day_calendar,
 #     load_raw_csv,
 #     align_to_calendar,
@@ -311,7 +320,7 @@ def test_align_to_calendar_empty_dataframe(sample_calendar):
 # ============================================================================
 
 
-@patch("create_staging_panel.load_raw_csv")
+@patch("src.create_staging_panel.load_raw_csv")
 def test_create_staging_panel_basic(mock_load, tmp_path):
     """Test basic panel creation with multiple assets."""
     # Mock CSV loading to return sample data
@@ -337,7 +346,7 @@ def test_create_staging_panel_basic(mock_load, tmp_path):
     assert output_file.exists()
 
 
-@patch("create_staging_panel.load_raw_csv")
+@patch("src.create_staging_panel.load_raw_csv")
 def test_create_staging_panel_missing_asset(mock_load, tmp_path, caplog):
     """Test panel creation when some assets are missing."""
 
@@ -359,7 +368,7 @@ def test_create_staging_panel_missing_asset(mock_load, tmp_path, caplog):
     assert "Skipping" in caplog.text
 
 
-@patch("create_staging_panel.load_raw_csv")
+@patch("src.create_staging_panel.load_raw_csv")
 def test_create_staging_panel_different_date_ranges(mock_load, tmp_path):
     """Test panel handles assets with different date ranges."""
 
@@ -380,8 +389,9 @@ def test_create_staging_panel_different_date_ranges(mock_load, tmp_path):
 
     # Panel should cover full date range
     assert not panel.empty
+    # FIXED: Use proper NaN check instead of self-comparison
     # Earlier dates should have NaN for newer assets
-    assert panel.loc["2020-01-02", "SPY_adj"] != panel.loc["2020-01-02", "SPY_adj"]  # NaN check
+    assert pd.isna(panel.loc["2020-01-02", "SPY_adj"])
 
 
 def test_create_staging_panel_output_format(tmp_path):
