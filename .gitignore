@@ -40,3 +40,4 @@ logs/*.json
 # OS
 .DS_Store
 Thumbs.db
+bandit_report.txt
