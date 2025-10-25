@@ -13,7 +13,9 @@ import pandas as pd
 LOGGER = logging.getLogger(__name__)
 
 
-def create_business_day_calendar(start_date="2009-01-01", end_date=None):
+def create_business_day_calendar(
+    start_date: str = "2009-01-01", end_date: str | None = None
+) -> pd.DatetimeIndex:
     """Create business day calendar (NYSE trading days)."""
     if end_date is None:
         end_date = pd.Timestamp.today()
@@ -28,7 +30,7 @@ def create_business_day_calendar(start_date="2009-01-01", end_date=None):
     return calendar
 
 
-def load_raw_csv(symbol, raw_dir="data/raw"):
+def load_raw_csv(symbol: str, raw_dir: str = "data/raw") -> pd.DataFrame:
     """
     Load a single raw CSV from data/raw/.
 
@@ -69,7 +71,12 @@ def load_raw_csv(symbol, raw_dir="data/raw"):
     return df
 
 
-def align_to_calendar(df, calendar, asset_name, max_ffill_days=3):
+def align_to_calendar(
+    df: pd.DataFrame,
+    calendar: pd.DatetimeIndex,
+    asset_name: str,
+    max_ffill_days: int = 3,
+) -> pd.DataFrame:
     """
     Align asset data to business day calendar with forward-fill limits.
 
@@ -108,7 +115,9 @@ def align_to_calendar(df, calendar, asset_name, max_ffill_days=3):
     return df_aligned
 
 
-def create_staging_panel(raw_dir="data/raw", output_dir="data/staging"):
+def create_staging_panel(
+    raw_dir: str = "data/raw", output_dir: str = "data/staging"
+) -> pd.DataFrame:
     """
     Create aligned panel.parquet from raw CSVs.
 
